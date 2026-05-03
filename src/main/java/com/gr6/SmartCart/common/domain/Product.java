@@ -7,7 +7,8 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
 
-@Entity @Table(name = "Products")
+@Entity
+@Table(name = "Products")
 @Data
 public class Product {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,7 +23,7 @@ public class Product {
     @Column(length = 100)
     private String brand;
 
-    @Enumerated(EnumType.STRING) @Column(length = 50)
+    @Enumerated(EnumType.STRING) @Column(name = "product_condition", length = 50)
     private ProductCondition condition;
 
     @Column(precision = 18, scale = 2)
