@@ -1,0 +1,6 @@
+package com.gr6.SmartCart.common.enums;
+
+public enum WalletStatus {
+    ACTIVE,
+    LOCKED
+}
