@@ -51,8 +51,10 @@ smartcart-backend
 ├── storefront                        # 🏪 ĐẢO TOÀN (Giao diện mua sắm Buyer)
 │   ├── controller
 │   │   └── DiscoveryController.java  # (SMAR-23, 26) API Lấy list sản phẩm ra trang chủ & Tìm kiếm
+|   |   |__ CartController.java       #(SMAR-35) 
 │   ├── service
 │   │   └── DiscoveryService.java     # Chứa logic lọc giá, tìm theo tên
+|   |   |__ CartService.java
 │   └── dto                           # SearchFilterRequest
 │
 ├── fulfillment                       # 🛒 ĐẢO HUY (Hậu cần & Vận hành đơn)
