@@ -1,7 +1,9 @@
 package com.gr6.SmartCart.modules.identity.controller;
 
+import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.modules.identity.dto.ShopManagerRequest;
 import com.gr6.SmartCart.modules.identity.service.ShopManagerService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,10 +11,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/shops")
 @RequiredArgsConstructor
 public class ShopManagementController {
+
     private final ShopManagerService shopManagerService;
 
-    @PutMapping("/{id}")
-    public String updateShop(@PathVariable Integer id, @RequestBody ShopManagerRequest request) {
-        return shopManagerService.updateShop(id, request);
+    // API: PUT http://localhost:8080/api/v1/shops/update
+    @PutMapping("/update")
+    public BaseResponse updateShop(@Valid @RequestBody ShopManagerRequest request) {
+        return shopManagerService.updateShop(request);
     }
 }

@@ -1,36 +1,35 @@
 package com.gr6.SmartCart.common.security;
 
+import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+// check quyen api  api  nao dc phép  vào đâu
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityFilterChainConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter; // Hết đỏ nhờ bước 1
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Tắt CSRF để có thể test API qua Postman/Swagger mà không cần token bảo mật trình duyệt [cite: 557]
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Mở cửa cho Swagger UI và tài liệu API để bạn xem "docs" [cite: 569, 570]
-                        .requestMatchers(
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/swagger-resources/**",
-                                "/webjars/**"
-                        ).permitAll()
-
-                        // 2. Mở cửa cho các API Đăng ký và Đăng nhập (SMAR-5, SMAR-11) [cite: 71, 557]
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/api/v1/shops/**").permitAll()
-                        // 3. Các yêu cầu còn lại đều phải đăng nhập mới được truy cập
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
                         .anyRequest().authenticated()
                 );
+
+        // Lắp "máy quét thẻ" vào cửa bảo vệ
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

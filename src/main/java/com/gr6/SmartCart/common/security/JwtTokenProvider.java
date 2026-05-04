@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
-
+// ham mã hóa tạo token
 @Component
 public class JwtTokenProvider {
 

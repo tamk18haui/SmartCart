@@ -4,7 +4,7 @@ import com.gr6.SmartCart.common.base.BaseResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
+// hàm bắt lỗi dùng chung
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
