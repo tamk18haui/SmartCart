@@ -24,8 +24,8 @@ public class BaseResponse<T> {
     }
 
     // Hàm tiện ích: Trả về khi API thành công, KHÔNG cần kèm dữ liệu (vd: Xóa thành công)
-    public static <T> BaseResponse<T> success(String message) {
-        return BaseResponse.<T>builder()
+    public static <Void> BaseResponse<Void> successMessage(String message) {
+        return BaseResponse.<Void>builder()
                 .status(200)
                 .message(message)
                 .data(null)
