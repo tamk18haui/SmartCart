@@ -18,11 +18,17 @@ public class BaseResponse<T> {
     public static <T> BaseResponse<T> success(T data) {
         return BaseResponse.<T>builder()
                 .status(200)
-                .message("Success")
+                .message("success")
                 .data(data)
                 .build();
     }
-
+    public static <T> BaseResponse<T> success_data(String message, T data) {
+        return BaseResponse.<T>builder()
+                .status(200)
+                .message(message)
+                .data(data)
+                .build();
+    }
     // Hàm tiện ích: Trả về khi API thành công, KHÔNG cần kèm dữ liệu (vd: Xóa thành công)
     public static <Void> BaseResponse<Void> successMessage(String message) {
         return BaseResponse.<Void>builder()
