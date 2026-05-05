@@ -30,7 +30,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
 
-        Shop shop = shopRepository.findById(Math.toIntExact(request.getShopId()))
+        Shop shop = shopRepository.findById(request.getShopId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Shop!"));
 
         // 2. Chuyển DTO sang Entity Product

@@ -21,6 +21,9 @@ public class Address {
 
     private Boolean isDefault;
 
+    @Column(columnDefinition = "boolean default false")
+    private Boolean isDeleted = false;
+
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
