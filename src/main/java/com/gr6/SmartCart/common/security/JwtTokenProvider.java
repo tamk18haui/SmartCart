@@ -46,7 +46,7 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
-    // 3. Hàm kiểm tra Token còn hạn và hợp lệ hay không [cite: 881]
+    // 3. Hàm kiểm tra Token còn hạn và hợp lệ hay không
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key()).build().parseClaimsJws(token);
