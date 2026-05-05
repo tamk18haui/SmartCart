@@ -4,6 +4,7 @@ import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,8 +24,11 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/api/v1/auth/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/api/v1/auth/**","/api/v1/fulfillment/product/**").permitAll()
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasRole("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasRole("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasRole("SELLER")
                         .anyRequest().authenticated()
                 );
 
