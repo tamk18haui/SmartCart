@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.modules.storefront.dto.CartItemRequest;
+import com.gr6.SmartCart.modules.storefront.dto.CartItemResponseDTO;
+import org.springframework.web.bind.annotation.GetMapping;
+import java.util.List;
 import com.gr6.SmartCart.modules.storefront.service.CartService;
 
 @RestController
@@ -20,6 +22,12 @@ public class CartController {
 
     @Autowired
     private CartService cartService;
+
+    @GetMapping("/items")
+    public ResponseEntity<BaseResponse<List<CartItemResponseDTO>>> getCartItems() {
+        List<CartItemResponseDTO> data = cartService.getCartItems();
+        return ResponseEntity.ok(BaseResponse.success_data("Lấy danh sách giỏ hàng thành công", data));
+    }
 
     @PostMapping("/add")
     public ResponseEntity<BaseResponse<Void>> addToCart(@RequestBody CartItemRequest request) {

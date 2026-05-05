@@ -3,7 +3,7 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-/src/main/java/com/gr6/SmartCart/config/**
+/src/main/java/com/gr6/SmartCart/common/security/**
 ### STS ###
 .apt_generated
 .classpath
@@ -36,4 +36,5 @@ build/
 ### postman ###
 .postman/
 postman/
+security/
 
