@@ -19,8 +19,14 @@ public class Order {
     @ManyToOne @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne @JoinColumn(name = "address_id", nullable = false)
-    private Address address;
+    @Column(nullable = false, length = 100)
+    private String receiverName;
+
+    @Column(nullable = false, length = 15)
+    private String receiverPhone;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String shippingAddress;
 
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;
