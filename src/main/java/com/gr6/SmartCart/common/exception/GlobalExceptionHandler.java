@@ -8,10 +8,22 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // Lỗi Validation (vd: @NotBlank, @Min...)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public BaseResponse<String> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        // Lấy thông báo lỗi đầu tiên mà bạn đã viết trong DTO (vd: "Mật khẩu phải có...")
-        String errorMessage = ex.getBindingResult().getFieldError().getDefaultMessage();
-        return BaseResponse.error(400, errorMessage);
+    public BaseResponse<String> handleValidation(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldError().getDefaultMessage();
+        return BaseResponse.error(400, msg);
+    }
+
+    // Lỗi nghiệp vụ (Voucher hết hạn, Sai mã...) -> Trả về 400
+    @ExceptionHandler(RuntimeException.class)
+    public BaseResponse<String> handleBusinessException(RuntimeException ex) {
+        return BaseResponse.error(400, ex.getMessage());
+    }
+
+    // Lỗi hệ thống thực sự (Null Pointer, Database sập...) -> Trả về 500
+    @ExceptionHandler(Exception.class)
+    public BaseResponse<String> handleGlobalException(Exception ex) {
+        return BaseResponse.error(500, "Lỗi hệ thống nội bộ, vui lòng thử lại sau!");
     }
 }
