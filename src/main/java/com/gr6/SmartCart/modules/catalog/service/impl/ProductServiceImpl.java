@@ -3,6 +3,7 @@ package com.gr6.SmartCart.modules.catalog.service.impl;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.base.PageResponse;
 import com.gr6.SmartCart.common.domain.*;
+import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.modules.catalog.dto.*;
 import com.gr6.SmartCart.modules.catalog.repository.*;
@@ -24,6 +25,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
+    // Bơm 2 Repository tính Lượt bán và Đánh giá sao
+    private final CatalogReviewRepository catalogReviewRepository;
+    private final CatalogOrderItemRepository catalogOrderItemRepository;
+
     private Shop getCurrentShop() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
@@ -43,6 +48,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
 
+        // GIỮ CODE CỦA SÁNG: Lấy Shop từ Token để chặn lỗi IDOR bảo mật
         Shop currentShop = getCurrentShop();
 
         Product product = new Product();
@@ -70,7 +76,17 @@ public class ProductServiceImpl implements ProductService {
         Page<Product> productPage = productRepository.findByShopShopIdAndStatusNot(
                 shopId, ProductStatus.DELETED, pageable
         );
-        Page<ProductResponse> responsePage = productPage.map(ProductResponse::fromEntity);
+
+        Page<ProductResponse> responsePage = productPage.map(product -> {
+            ProductResponse res = ProductResponse.fromEntity(product);
+
+            Double avgRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
+            res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
+
+            res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(product.getProductId(), OrderStatus.DELIVERED));
+            return res;
+        });
+
         return BaseResponse.success_data("Lấy danh sách sản phẩm thành công", PageResponse.of(responsePage));
     }
 
@@ -135,6 +151,13 @@ public class ProductServiceImpl implements ProductService {
             return BaseResponse.error(404, "Sản phẩm này đã bị xóa!");
         }
 
-        return BaseResponse.success_data("Lấy chi tiết thành công", ProductResponse.fromEntity(product));
+        ProductResponse res = ProductResponse.fromEntity(product);
+
+        Double avgRating = catalogReviewRepository.getAverageRatingByProductId(productId);
+        res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
+
+        res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(productId, OrderStatus.DELIVERED));
+
+        return BaseResponse.success_data("Lấy chi tiết thành công", res);
     }
 }

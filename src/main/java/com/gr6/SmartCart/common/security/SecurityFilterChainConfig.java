@@ -23,9 +23,10 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/api/v1/auth/**").permitAll()
+                        // Gộp chung permitAll của hệ thống, Auth và Storefront của Khách mua
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/v1/auth/**", "/api/storefront/**").permitAll()
 
-                        // Chỉ mở cho Khách xem Danh mục, các phần Sản phẩm Public thì để người khác tự thêm sau
+                        // API của Sáng: Khách vãng lai xem danh mục
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories").permitAll()
 
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")

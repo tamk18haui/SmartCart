@@ -18,6 +18,10 @@ public class ProductResponse {
     private String status;
     private List<VariantResponse> variants;
 
+    // --- 2 TRƯỜNG MỚI ĐƯỢC THÊM VÀO CHO SELLER ---
+    private Double averageRating;
+    private Integer soldQuantity;
+
     public static ProductResponse fromEntity(Product product) {
         ProductResponse response = new ProductResponse();
         response.setProductId(product.getProductId());
@@ -30,6 +34,10 @@ public class ProductResponse {
         if(product.getStatus() != null) {
             response.setStatus(product.getStatus().name());
         }
+
+        // Mặc định lúc mới tạo là 0 sao và 0 lượt bán
+        response.setAverageRating(0.0);
+        response.setSoldQuantity(0);
 
         if (product.getVariants() != null) {
             response.setVariants(product.getVariants().stream()
