@@ -12,27 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class InventoryServiceImpl implements InventoryService {
-
     private final ProductVariantRepository productVariantRepository;
 
     @Override
-    @Transactional // Đảm bảo tính toàn vẹn: Nếu có lỗi xảy ra, mọi thay đổi sẽ được khôi phục (rollback)
+    @Transactional
     public BaseResponse<String> decreaseStock(InventoryUpdateRequest request) {
-        // 1. Kiểm tra sản phẩm có tồn tại trong hệ thống không
-        ProductVariant variant = productVariantRepository.findById(request.getVariantId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể sản phẩm có ID: " + request.getVariantId()));
 
-        // 2. Logic kiểm tra tồn kho
+        // ĐÃ SỬA: Gọi hàm findByIdWithLock thay vì findById bình thường
+        ProductVariant variant = productVariantRepository.findByIdWithLock(request.getVariantId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
+
         if (variant.getStockQuantity() < request.getQuantity()) {
-            return BaseResponse.error(400, "Lỗi: Số lượng tồn kho không đủ! (Hiện còn: " + variant.getStockQuantity() + ")");
+            return BaseResponse.error(400, "Số lượng tồn kho không đủ!");
         }
 
-        // 3. Thực hiện trừ kho
         variant.setStockQuantity(variant.getStockQuantity() - request.getQuantity());
-
-        // 4. Cập nhật lại Database
         productVariantRepository.save(variant);
-
-        return BaseResponse.successMessage("Đã trừ kho thành công cho biến thể ID: " + request.getVariantId());
+        return BaseResponse.successMessage("Đã trừ kho thành công!");
     }
 }

@@ -1,5 +1,4 @@
 package com.gr6.SmartCart.modules.catalog.controller;
-
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.modules.catalog.dto.InventoryUpdateRequest;
 import com.gr6.SmartCart.modules.catalog.service.InventoryService;
@@ -11,10 +10,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/inventory")
 @RequiredArgsConstructor
 public class InventoryController {
-
     private final InventoryService inventoryService;
 
-    // API để các module khác gọi sang trừ kho
     @PostMapping("/decrease")
     public BaseResponse<String> decreaseStock(@Valid @RequestBody InventoryUpdateRequest request) {
         return inventoryService.decreaseStock(request);

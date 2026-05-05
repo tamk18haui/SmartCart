@@ -1,11 +1,11 @@
 package com.gr6.SmartCart.modules.catalog.service;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.Category;
 import com.gr6.SmartCart.modules.catalog.dto.CategoryRequest;
+import com.gr6.SmartCart.modules.catalog.dto.CategoryResponse;
 import java.util.List;
 
 public interface CategoryService {
-    BaseResponse<Category> createCategory(CategoryRequest request);
-    BaseResponse<List<Category>> getAllCategories();
+    BaseResponse<CategoryResponse> createCategory(CategoryRequest request);
+    BaseResponse<List<CategoryResponse>> getAllCategories();
 }
