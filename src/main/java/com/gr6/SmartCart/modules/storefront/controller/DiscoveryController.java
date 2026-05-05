@@ -1,10 +1,19 @@
 package com.gr6.SmartCart.modules.storefront.controller;
 
-import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
-import com.gr6.SmartCart.modules.storefront.service.DiscoveryService;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.gr6.SmartCart.common.base.BaseResponse;
+import com.gr6.SmartCart.modules.storefront.dto.ProductResponseDTO;
+import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
+import com.gr6.SmartCart.modules.storefront.service.DiscoveryService;
 
 @RestController
 @RequestMapping("/api/storefront/discovery")
@@ -13,15 +22,16 @@ public class DiscoveryController {
     @Autowired
     private DiscoveryService discoveryService;
 
-    // (SMAR-23) API Lấy list sản phẩm ra trang chủ
     @GetMapping("/home-products")
-    public ResponseEntity<?> getHomeProducts() {
-        return ResponseEntity.ok(discoveryService.getHomeProducts());
+    public ResponseEntity<BaseResponse<List<ProductResponseDTO>>> getHomeProducts() {
+        List<ProductResponseDTO> data = discoveryService.getHomeProducts();
+        // Gọi hàm success_data với đúng thứ tự (message, data)
+        return ResponseEntity.ok(BaseResponse.success_data("Lấy danh sách sản phẩm trang chủ thành công", data));
     }
 
-    // (SMAR-26) API Tìm kiếm và lọc sản phẩm
     @PostMapping("/search")
-    public ResponseEntity<?> searchProducts(@RequestBody SearchFilterRequest request) {
-        return ResponseEntity.ok(discoveryService.searchAndFilterProducts(request));
+    public ResponseEntity<BaseResponse<List<ProductResponseDTO>>> searchProducts(@RequestBody SearchFilterRequest request) {
+        List<ProductResponseDTO> data = discoveryService.searchAndFilterProducts(request);
+        return ResponseEntity.ok(BaseResponse.success_data("Tìm kiếm thành công", data));
     }
 }
