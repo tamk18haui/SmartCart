@@ -7,7 +7,6 @@ import lombok.Data;
 public class CategoryRequest {
     @NotBlank(message = "Tên danh mục không được để trống!")
     private String categoryName;
-
     private String categoryDescription;
     private String categoryImageUrl;
 }

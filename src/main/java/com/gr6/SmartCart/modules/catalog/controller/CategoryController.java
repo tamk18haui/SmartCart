@@ -1,8 +1,7 @@
 package com.gr6.SmartCart.modules.catalog.controller;
-
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.Category;
 import com.gr6.SmartCart.modules.catalog.dto.CategoryRequest;
+import com.gr6.SmartCart.modules.catalog.dto.CategoryResponse;
 import com.gr6.SmartCart.modules.catalog.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,16 +12,15 @@ import java.util.List;
 @RequestMapping("/api/v1/categories")
 @RequiredArgsConstructor
 public class CategoryController {
-
     private final CategoryService categoryService;
 
     @PostMapping
-    public BaseResponse<Category> createCategory(@Valid @RequestBody CategoryRequest request) {
+    public BaseResponse<CategoryResponse> createCategory(@Valid @RequestBody CategoryRequest request) {
         return categoryService.createCategory(request);
     }
 
     @GetMapping
-    public BaseResponse<List<Category>> getAllCategories() {
+    public BaseResponse<List<CategoryResponse>> getAllCategories() {
         return categoryService.getAllCategories();
     }
 }
