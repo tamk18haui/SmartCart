@@ -23,6 +23,7 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/storefront/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
                         .anyRequest().authenticated()
