@@ -56,7 +56,6 @@ public class OrderServiceImpl implements OrderService {
             }
             return address;
         } else {
-            // Lọc bỏ địa chỉ đã xóa mềm
             List<Address> userAddresses = addressRepository.findByUser(user).stream()
                     .filter(a -> !a.getIsDeleted())
                     .toList();
@@ -69,6 +68,7 @@ public class OrderServiceImpl implements OrderService {
                     .orElse(userAddresses.get(0));
         }
     }
+
     // =================================================================
     // API 1: HIỂN THỊ MÀN HÌNH THANH TOÁN (Preview)
     // =================================================================
@@ -77,8 +77,11 @@ public class OrderServiceImpl implements OrderService {
         User user = getCurrentUser();
         Address selectedAddress = resolveAddress(request.getAddressId(), user);
 
+        long grandTotalItemPrice = 0L;
         long grandTotalAmount = 0L;
+        long grandTotalDiscount = 0L;
         long totalShippingFee = 0L;
+
         List<CheckoutPreviewResponse.ShopPreview> shopPreviews = new ArrayList<>();
 
         for (CheckoutPreviewRequest.ShopOrderPreviewDto shopReq : request.getShopOrders()) {
@@ -112,15 +115,21 @@ public class OrderServiceImpl implements OrderService {
                         .build());
             }
 
-            long discount = voucherService.calculateDiscount(shopReq.getVoucherCode(), shopSubtotal, shop.getShopId(), user.getUserId());            long shippingFee = 30000L; // Có thể nâng cấp viết hàm tính phí ship riêng dựa vào selectedAddress
+            long discount = voucherService.calculateDiscount(shopReq.getVoucherCode(), shopSubtotal, shop.getShopId(), user.getUserId());
+            long shippingFee = 30000L; // TODO: Đẩy con số này ra file config cấu hình sau
             long finalShopTotal = Math.max(0, shopSubtotal + shippingFee - discount);
 
+            grandTotalItemPrice += shopSubtotal;
             totalShippingFee += shippingFee;
             grandTotalAmount += finalShopTotal;
+            grandTotalDiscount += discount;
 
             shopPreviews.add(CheckoutPreviewResponse.ShopPreview.builder()
                     .shopName(shop.getShopName())
                     .items(itemPreviews)
+                    .shopItemTotal(shopSubtotal)
+                    .shopShippingFee(shippingFee)
+                    .shopDiscount(discount)
                     .subtotal(finalShopTotal)
                     .build());
         }
@@ -140,6 +149,8 @@ public class OrderServiceImpl implements OrderService {
                 .shops(shopPreviews)
                 .totalShippingFee(totalShippingFee)
                 .totalAmount(grandTotalAmount)
+                .totalItemPrice(grandTotalItemPrice)
+                .totalDiscount(grandTotalDiscount)
                 .build();
 
         return BaseResponse.success_data("Lấy dữ liệu màn hình thanh toán thành công", response);
@@ -153,13 +164,12 @@ public class OrderServiceImpl implements OrderService {
     public BaseResponse<?> createOrder(CreateOrderRequest request) {
         User user = getCurrentUser();
 
-        // Bắt buộc phải có địa chỉ khi bấm nút Đặt Hàng
         if (request.getAddressId() == null) {
             return BaseResponse.error(400, "Vui lòng thêm địa chỉ giao hàng trước khi đặt hàng!");
         }
         Address address = resolveAddress(request.getAddressId(), user);
 
-        // BƯỚC 1: KIỂM TRA TỒN KHO & TÍNH TOÁN
+        // BƯỚC 1: TÍNH TOÁN NHANH TIỀN BẠC TRƯỚC KHI TẠO ĐƠN
         Map<Long, Long> shopSubtotalMap = new HashMap<>();
         Map<Long, Long> discountMap = new HashMap<>();
 
@@ -167,6 +177,7 @@ public class OrderServiceImpl implements OrderService {
             long subtotal = 0L;
 
             for (CreateOrderRequest.OrderItemDto item : shopDto.getItems()) {
+                // Chỉ đọc thông thường để tính tiền
                 ProductVariant variant = variantRepository.findById(item.getVariantId())
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể sản phẩm!"));
 
@@ -174,15 +185,11 @@ public class OrderServiceImpl implements OrderService {
                     throw new RuntimeException("Sản phẩm không thuộc cửa hàng này!");
                 }
 
-                //Báo lỗi chi tiết nếu hết hàng
-                if (variant.getStockQuantity() < item.getQuantity()) {
-                    throw new RuntimeException("Sản phẩm '" + variant.getProduct().getName() + "' đã hết hàng! Vui lòng kiểm tra lại.");
-                }
-
                 subtotal += variant.getPrice().longValue() * item.getQuantity();
             }
 
-            long discount = voucherService.calculateDiscount(shopDto.getVoucherCode(), subtotal, shopDto.getShopId(), user.getUserId());            shopSubtotalMap.put(shopDto.getShopId(), subtotal);
+            long discount = voucherService.calculateDiscount(shopDto.getVoucherCode(), subtotal, shopDto.getShopId(), user.getUserId());
+            shopSubtotalMap.put(shopDto.getShopId(), subtotal);
             discountMap.put(shopDto.getShopId(), discount);
         }
 
@@ -200,7 +207,7 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal grandTotal = BigDecimal.ZERO;
 
-        // BƯỚC 3: TẠO ĐƠN HÀNG CON, CHI TIẾT ĐƠN VÀ TRỪ KHO
+        // BƯỚC 3: TRỪ TỒN KHO AN TOÀN VÀ LƯU CHI TIẾT
         for (CreateOrderRequest.ShopOrderDto shopDto : request.getShopOrders()) {
             Shop shop = shopRepository.findById(shopDto.getShopId())
                     .orElseThrow(() -> new RuntimeException("Cửa hàng không tồn tại!"));
@@ -216,9 +223,16 @@ public class OrderServiceImpl implements OrderService {
             List<OrderItem> items = new ArrayList<>();
 
             for (CreateOrderRequest.OrderItemDto item : shopDto.getItems()) {
-                ProductVariant variant = variantRepository.findById(item.getVariantId()).get();
+                // SỬA LỖI CHÍ MẠNG: Khóa Row ngay lúc này để giành quyền trừ kho độc quyền
+                ProductVariant variant = variantRepository.findByIdWithLock(item.getVariantId())
+                        .orElseThrow(() -> new RuntimeException("Lỗi dữ liệu: Sản phẩm đã bị xóa hoặc ẩn khỏi hệ thống!"));
 
-                // Trừ tồn kho
+                // Kiểm tra Tồn kho LẠI MỘT LẦN NỮA sau khi đã có khóa
+                if (variant.getStockQuantity() < item.getQuantity()) {
+                    throw new RuntimeException("Sản phẩm '" + variant.getProduct().getName() + "' đã hết hàng hoặc không đủ số lượng!");
+                }
+
+                // Trừ tồn kho an toàn
                 variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
                 variantRepository.save(variant);
 
@@ -228,9 +242,6 @@ public class OrderServiceImpl implements OrderService {
                 oi.setQuantity(item.getQuantity());
                 oi.setPriceAtPurchase(variant.getPrice().longValue());
                 items.add(oi);
-
-                // TODO: Nếu App có giỏ hàng, gọi lệnh xóa sản phẩm khỏi giỏ hàng ở đây
-                // cartItemRepository.deleteByUser_UserIdAndVariant_VariantId(user.getUserId(), variant.getVariantId());
             }
 
             long finalTotal = subtotal + shopOrder.getShippingFee() - discount;
@@ -248,7 +259,7 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(grandTotal);
         orderRepository.save(order);
 
-        // BƯỚC 4: XỬ LÝ PHƯƠNG THỨC THANH TOÁN (Nhánh 3)
+        // BƯỚC 4: XỬ LÝ PHƯƠNG THỨC THANH TOÁN
         if (request.getPaymentMethod() == PaymentMethod.ONLINE) {
             String momoPaymentUrl = "https://test-payment.momo.vn/v2/gateway/api/create?orderId="
                     + order.getOrderId() + "&amount=" + grandTotal.longValue();

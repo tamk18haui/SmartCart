@@ -3,10 +3,14 @@ package com.gr6.SmartCart.common.domain;
 import com.gr6.SmartCart.common.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.time.LocalDateTime;
 
 @Entity @Table(name = "Vouchers")
-@Data
+@Getter
+@Setter
 public class Voucher {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long voucherId;
