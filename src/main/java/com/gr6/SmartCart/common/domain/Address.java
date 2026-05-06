@@ -2,10 +2,13 @@ package com.gr6.SmartCart.common.domain;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(name = "Addresses")
-@Data
+@Getter
+@Setter
 public class Address {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long addressId;
@@ -20,6 +23,9 @@ public class Address {
     private String fullAddress;
 
     private Boolean isDefault;
+
+    @Column(columnDefinition = "boolean default false")
+    private Boolean isDeleted = false;
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)

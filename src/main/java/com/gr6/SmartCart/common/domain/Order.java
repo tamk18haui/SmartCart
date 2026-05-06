@@ -5,13 +5,16 @@ import com.gr6.SmartCart.common.enums.PaymentMethod;
 import com.gr6.SmartCart.common.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity @Table(name = "Orders")
-@Data
+@Getter
+@Setter
 public class Order {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderId;
@@ -19,8 +22,14 @@ public class Order {
     @ManyToOne @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne @JoinColumn(name = "address_id", nullable = false)
-    private Address address;
+    @Column(nullable = false, length = 100)
+    private String receiverName;
+
+    @Column(nullable = false, length = 15)
+    private String receiverPhone;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String shippingAddress;
 
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;

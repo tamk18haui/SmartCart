@@ -1,36 +1,48 @@
 package com.gr6.SmartCart.modules.catalog.controller;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.base.PageResponse;
 import com.gr6.SmartCart.modules.catalog.dto.ProductRequest;
+import com.gr6.SmartCart.modules.catalog.dto.ProductResponse;
 import com.gr6.SmartCart.modules.catalog.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
 public class ProductController {
-
     private final ProductService productService;
 
-    // API để Seller đăng bán sản phẩm mới
     @PostMapping
-    public BaseResponse<Product> createProduct(@Valid @RequestBody ProductRequest request) {
+    public BaseResponse<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
         return productService.createProduct(request);
     }
 
-    // API xem danh sách sản phẩm của một Shop
     @GetMapping("/shop/{shopId}")
-    public BaseResponse<List<Product>> getProductsByShop(@PathVariable Long shopId) {
-        return productService.getProductsByShop(shopId);
+    public BaseResponse<PageResponse<ProductResponse>> getProductsByShop(
+            @PathVariable Long shopId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return productService.getProductsByShop(shopId, page, size);
     }
 
-    // API để Seller xóa sản phẩm
+    @PutMapping("/{productId}")
+    public BaseResponse<ProductResponse> updateProduct(
+            @PathVariable Long productId,
+            @Valid @RequestBody ProductRequest request) {
+        return productService.updateProduct(productId, request);
+    }
+
     @DeleteMapping("/{productId}")
     public BaseResponse<String> deleteProduct(@PathVariable Long productId) {
         return productService.deleteProduct(productId);
+    }
+
+    @GetMapping("/seller/{productId}")
+    public BaseResponse<ProductResponse> getProductForSeller(@PathVariable Long productId) {
+        return productService.getProductForSeller(productId);
     }
 }

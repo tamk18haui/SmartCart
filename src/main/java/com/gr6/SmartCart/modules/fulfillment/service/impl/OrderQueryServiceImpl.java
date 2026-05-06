@@ -2,8 +2,8 @@ package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.ShopOrder;
+import com.gr6.SmartCart.modules.finance_core.repository.ShopOrderRepository;
 import com.gr6.SmartCart.modules.fulfillment.dto.*;
-import com.gr6.SmartCart.modules.fulfillment.repository.ShopOrderRepository;
 import com.gr6.SmartCart.modules.fulfillment.service.OrderQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -47,25 +47,26 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
         if (!order.getShop().getUser().getEmail().equals(email)) {
-            return BaseResponse.error(404,"Bạn không có quyền xem đơn hàng này");
+            return BaseResponse.error(404, "Bạn không có quyền xem đơn hàng này");
         }
 
-        // Lưu ý: Lấy thông tin địa chỉ từ bảng Order (order.getOrder())
+        // Lấy thông tin từ bảng Order (parentOrder) của bạn
         var parentOrder = order.getOrder();
+
         OrderDetailResponse detail = OrderDetailResponse.builder()
                 .id(order.getShopOrderId())
                 .status(order.getStatus())
                 .totalAmount(BigDecimal.valueOf(order.getTotalAmount()))
-                // Lấy thông tin từ bảng Orders -> Addresses
-                .receiverName(order.getOrder().getAddress().getReceiverName())
-                .receiverPhone(order.getOrder().getAddress().getReceiverPhone())
-                .shippingAddress(order.getOrder().getAddress().getFullAddress())
+                // LẤY TRỰC TIẾP TỪ parentOrder VÌ BẠN ĐÃ KHAI BÁO TRONG ENTITY
+                .receiverName(parentOrder.getReceiverName())
+                .receiverPhone(parentOrder.getReceiverPhone())
+                .shippingAddress(parentOrder.getShippingAddress())
                 .items(order.getItems().stream().map(item ->
                         OrderItemDTO.builder()
-                                .productName(item.getVariant().getProduct().getName()) // Sửa thành getVariant()
+                                .productName(item.getVariant().getProduct().getName())
                                 .variantName(item.getVariant().getSku())
                                 .quantity(item.getQuantity())
-                                .price(BigDecimal.valueOf(item.getPriceAtPurchase())) // Khớp bảng 16: price_at_purchase
+                                .price(BigDecimal.valueOf(item.getPriceAtPurchase()))
                                 .build()
                 ).collect(Collectors.toList()))
                 .build();
