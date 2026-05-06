@@ -1,5 +1,4 @@
 package com.gr6.SmartCart.modules.catalog.repository;
-
 import com.gr6.SmartCart.common.domain.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

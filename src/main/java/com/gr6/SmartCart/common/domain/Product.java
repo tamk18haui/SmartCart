@@ -4,12 +4,16 @@ import com.gr6.SmartCart.common.enums.ProductCondition;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.math.BigDecimal;
 import java.util.List;
 
 @Entity
 @Table(name = "Products")
-@Data
+@Getter
+@Setter
 public class Product {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long productId;
@@ -31,6 +35,9 @@ public class Product {
 
     @Column(columnDefinition = "TEXT")
     private String imageUrls;
+
+    @Column(columnDefinition = "int default 0")
+    private Integer soldCount = 0;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal weight;

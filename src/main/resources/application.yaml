@@ -23,8 +23,9 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
+    open-in-view: false
 
-# 3. Cấu hình upload file (Dành cho upload ảnh sản phẩm/avatar)
+  # 3. Cấu hình upload file (Dành cho upload ảnh sản phẩm/avatar)
   servlet:
     multipart:
       max-file-size: 10MB

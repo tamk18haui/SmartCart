@@ -2,9 +2,12 @@ package com.gr6.SmartCart.common.domain;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 @Entity @Table(name = "Order_Items")
-@Data
+@Getter
+@Setter
 public class OrderItem {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderItemId;
