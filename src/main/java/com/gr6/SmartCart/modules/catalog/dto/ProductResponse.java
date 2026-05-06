@@ -18,7 +18,7 @@ public class ProductResponse {
     private String status;
     private List<VariantResponse> variants;
 
-    // --- 2 TRƯỜNG MỚI ĐƯỢC THÊM VÀO CHO SELLER ---
+    // THÊM: 2 trường mới cho Seller (Đánh giá trung bình và Lượt bán)
     private Double averageRating;
     private Integer soldQuantity;
 
@@ -35,7 +35,7 @@ public class ProductResponse {
             response.setStatus(product.getStatus().name());
         }
 
-        // Mặc định lúc mới tạo là 0 sao và 0 lượt bán
+        // Mặc định lúc mới tạo là 0
         response.setAverageRating(0.0);
         response.setSoldQuantity(0);
 

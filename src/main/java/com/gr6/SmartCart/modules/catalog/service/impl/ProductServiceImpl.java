@@ -25,7 +25,7 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
-    // Bơm 2 Repository tính Lượt bán và Đánh giá sao
+    // Bơm 2 Repository tàng hình của Catalog vào
     private final CatalogReviewRepository catalogReviewRepository;
     private final CatalogOrderItemRepository catalogOrderItemRepository;
 
@@ -80,6 +80,7 @@ public class ProductServiceImpl implements ProductService {
         Page<ProductResponse> responsePage = productPage.map(product -> {
             ProductResponse res = ProductResponse.fromEntity(product);
 
+            // Tự tính sao và lượt bán bằng Query ngầm
             Double avgRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
             res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
 
@@ -153,6 +154,7 @@ public class ProductServiceImpl implements ProductService {
 
         ProductResponse res = ProductResponse.fromEntity(product);
 
+        // Tự tính sao và lượt bán cho chi tiết sản phẩm
         Double avgRating = catalogReviewRepository.getAverageRatingByProductId(productId);
         res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
 

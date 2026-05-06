@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CatalogReviewRepository extends JpaRepository<Review, Long> {
 
-    // Tính trung bình cộng Rating. Dùng COALESCE để nếu chưa ai đánh giá thì trả về 0.0
+    // Tính trung bình cộng Rating
     @Query("SELECT COALESCE(AVG(r.rating), 0.0) FROM Review r WHERE r.product.productId = :productId")
     Double getAverageRatingByProductId(@Param("productId") Long productId);
 }
