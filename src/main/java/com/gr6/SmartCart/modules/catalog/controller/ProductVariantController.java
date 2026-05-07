@@ -14,9 +14,20 @@ import org.springframework.web.bind.annotation.*;
 public class ProductVariantController {
     private final ProductVariantService variantService;
 
-    // Phải có @Valid thì các lệnh @Min, @NotNull mới chạy
     @PostMapping
     public BaseResponse<VariantResponse> createVariant(@Valid @RequestBody VariantCreateRequest request) {
         return variantService.createVariant(request);
+    }
+
+    // THÊM: API Cập nhật biến thể
+    @PutMapping("/{variantId}")
+    public BaseResponse<VariantResponse> updateVariant(@PathVariable Long variantId, @Valid @RequestBody VariantCreateRequest request) {
+        return variantService.updateVariant(variantId, request);
+    }
+
+    // THÊM: API Xóa biến thể (Để Frontend xóa cái Mặc định đi)
+    @DeleteMapping("/{variantId}")
+    public BaseResponse<String> deleteVariant(@PathVariable Long variantId) {
+        return variantService.deleteVariant(variantId);
     }
 }

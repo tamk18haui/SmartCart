@@ -23,13 +23,27 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Gộp chung permitAll của hệ thống, Auth và Storefront của Khách mua
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/v1/auth/**", "/api/storefront/**").permitAll()
+                        // 1. Gộp chung các endpoint công khai: Swagger, Auth, và Storefront (từ Sáng)
+                        // Bao gồm cả endpoint fulfillment/product từ phiên bản local của bạn
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/api/v1/auth/**",
+                                "/api/storefront/**",
+                                "/api/v1/fulfillment/product/**"
+                        ).permitAll()
 
-                        // API của Sáng: Khách vãng lai xem danh mục
+                        // 2. API xem danh mục dành cho khách vãng lai (từ Sáng)
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories").permitAll()
 
+                        // 3. Các quyền hạn dành riêng cho SELLER (Người bán)
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasRole("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasRole("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasRole("SELLER")
+
+                        // 4. Các yêu cầu còn lại đều phải xác thực
                         .anyRequest().authenticated()
                 );
 

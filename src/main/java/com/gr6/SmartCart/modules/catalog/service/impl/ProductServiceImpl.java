@@ -18,6 +18,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -25,9 +27,12 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
-    // Bơm 2 Repository tàng hình của Catalog vào
+    // Các Repository phụ trợ của Catalog
     private final CatalogReviewRepository catalogReviewRepository;
     private final CatalogOrderItemRepository catalogOrderItemRepository;
+
+    // THÊM MỚI: Bơm kho Biến thể vào để tự tạo biến thể mặc định
+    private final ProductVariantRepository variantRepository;
 
     private Shop getCurrentShop() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -48,7 +53,6 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
 
-        // GIỮ CODE CỦA SÁNG: Lấy Shop từ Token để chặn lỗi IDOR bảo mật
         Shop currentShop = getCurrentShop();
 
         Product product = new Product();
@@ -65,7 +69,22 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         product.setShop(currentShop);
 
+        // 1. Lưu sản phẩm gốc trước
         Product savedProduct = productRepository.save(product);
+
+        // 2. TỰ ĐỘNG TẠO BIẾN THỂ MẶC ĐỊNH
+        ProductVariant defaultVariant = new ProductVariant();
+        defaultVariant.setProduct(savedProduct);
+        defaultVariant.setSku("SP" + savedProduct.getProductId() + "-DEFAULT"); // Tạo mã SKU ngẫu nhiên nhưng duy nhất
+        defaultVariant.setPrice(savedProduct.getBasePrice());
+        defaultVariant.setStockQuantity(request.getStockQuantity());
+
+        ProductVariant savedVariant = variantRepository.save(defaultVariant);
+
+        // Gắn biến thể vừa tạo vào Response để trả về cho Frontend hiển thị ngay
+        savedProduct.setVariants(new ArrayList<>());
+        savedProduct.getVariants().add(savedVariant);
+
         return BaseResponse.success_data("Đã đăng sản phẩm thành công!", ProductResponse.fromEntity(savedProduct));
     }
 
@@ -80,7 +99,6 @@ public class ProductServiceImpl implements ProductService {
         Page<ProductResponse> responsePage = productPage.map(product -> {
             ProductResponse res = ProductResponse.fromEntity(product);
 
-            // Tự tính sao và lượt bán bằng Query ngầm
             Double avgRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
             res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
 
@@ -154,7 +172,6 @@ public class ProductServiceImpl implements ProductService {
 
         ProductResponse res = ProductResponse.fromEntity(product);
 
-        // Tự tính sao và lượt bán cho chi tiết sản phẩm
         Double avgRating = catalogReviewRepository.getAverageRatingByProductId(productId);
         res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
 

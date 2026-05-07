@@ -38,5 +38,8 @@ public class ProductRequest {
     @NotNull(message = "ID danh mục không được để trống")
     private Long categoryId;
 
-    // Đã xóa shopId ở đây để khóa đường truyền của Hacker
+    // THÊM TRƯỜNG NÀY: Để nhận số lượng tồn kho ban đầu từ người bán
+    @NotNull(message = "Số lượng tồn kho ban đầu không được để trống")
+    @Min(value = 0, message = "Tồn kho không được âm")
+    private Integer stockQuantity;
 }
