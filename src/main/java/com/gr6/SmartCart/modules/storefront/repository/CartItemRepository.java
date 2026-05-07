@@ -1,17 +1,20 @@
 package com.gr6.SmartCart.modules.storefront.repository;
 
-import com.gr6.SmartCart.common.domain.CartItem;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.gr6.SmartCart.common.domain.CartItem;
 
 @Repository
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     
-    // Spring Data JPA sẽ tự hiểu: Vào bảng CartItem -> Tìm user -> Lấy userId VÀ Tìm variant -> Lấy variantId
     Optional<CartItem> findByUser_UserIdAndVariant_VariantId(Long userId, Long variantId);
     
     List<CartItem> findByUser_UserId(Long userId);
+
+    // THÊM MỚI: Tìm chính xác 1 item trong giỏ của người dùng cụ thể
+    Optional<CartItem> findByCartItemIdAndUser_UserId(Long cartItemId, Long userId);
 }

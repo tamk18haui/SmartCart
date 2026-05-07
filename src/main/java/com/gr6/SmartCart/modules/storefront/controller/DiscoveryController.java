@@ -18,7 +18,7 @@ import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
 import com.gr6.SmartCart.modules.storefront.service.DiscoveryService;
 
 @RestController
-@RequestMapping("/api/storefront/discovery")
+@RequestMapping("/api/v1/storefront/discovery")
 public class DiscoveryController {
 
     @Autowired
