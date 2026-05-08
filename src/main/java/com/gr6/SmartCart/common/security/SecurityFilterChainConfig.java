@@ -30,6 +30,7 @@ public class SecurityFilterChainConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/auth/**",
+                                "/api/v1/shops/register",
                                 "/api/storefront/**",
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
