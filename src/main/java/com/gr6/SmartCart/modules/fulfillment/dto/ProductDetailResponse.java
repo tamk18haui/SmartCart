@@ -4,6 +4,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -17,11 +18,19 @@ public class ProductDetailResponse {
     private BigDecimal basePrice;
     private List<String> imageUrls;
     private String shopName;
-    private Integer totalStock; // Tổng tồn kho từ các biến thể
+    private Integer totalStock;
     private String status;
 
-    private List<VariantDTO> variants; // Danh sách biến thể
-    private List<ReviewDTO> reviews;   // Danh sách đánh giá
+    // --- PHẦN QUAN TRỌNG ĐỂ VẼ NÚT CHỌN MÀU/SIZE ---
+    private List<OptionGroupDTO> optionGroups;
+    private List<VariantDTO> variants;
+    private List<ReviewDTO> reviews;
+
+    @Data @Builder
+    public static class OptionGroupDTO {
+        private String name; // Ví dụ: "Màu sắc", "Kích cỡ"
+        private List<String> values; // Ví dụ: ["Đỏ", "Xanh"], ["S", "M"]
+    }
 
     @Data @Builder
     public static class VariantDTO {
@@ -30,13 +39,13 @@ public class ProductDetailResponse {
         private BigDecimal price;
         private Integer stockQuantity;
         private String imageUrl;
+        private Map<String, String> attributes; // Ví dụ: {"Màu sắc": "Đỏ", "Size": "S"}
     }
 
     @Data @Builder
     public static class ReviewDTO {
         private Integer rating;
         private String comment;
-        private String imageUrl;
         private String userName;
     }
 }

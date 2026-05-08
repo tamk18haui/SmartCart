@@ -1,69 +1,80 @@
 package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
+import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.domain.ProductOptionValue;
 import com.gr6.SmartCart.common.domain.ProductVariant;
 import com.gr6.SmartCart.common.domain.Review;
+import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
 import com.gr6.SmartCart.modules.fulfillment.dto.ProductDetailResponse;
 import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
 
+import com.gr6.SmartCart.modules.fulfillment.service.ProductDetailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
-public class ProductDetailServiceImpl {
+@RequiredArgsConstructor // Sử dụng thay cho Autowired lẻ tẻ
+public class ProductDetailServiceImpl implements ProductDetailService {
 
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
+
+    @Override
     @Transactional(readOnly = true)
-    public ProductDetailResponse getProductDetail(Long productId) {
-        // 1. Lấy thông tin sản phẩm (Ném lỗi nếu không tìm thấy)
+    public BaseResponse<ProductDetailResponse> getProductDetail(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại!"));
 
-        // 2. Kiểm tra trạng thái rẽ nhánh (BANNED hoặc HIDDEN) [Yêu cầu UC 3.2.1]
-        if ("BANNED".equals(product.getStatus().name()) || "HIDDEN".equals(product.getStatus().name())) {
-            throw new RuntimeException("Sản phẩm hiện không khả dụng.");
+        if (product.getStatus() == ProductStatus.HIDDEN || product.getStatus() == ProductStatus.DELETED) {
+            return BaseResponse.error(404, "Sản phẩm hiện không khả dụng.");
         }
 
-        // 3. Lấy danh sách đánh giá
-        List<Review> reviews = reviewRepository.findByProductId(productId);
+        // 1. Nhóm các Option (Màu sắc, Kích cỡ) để Frontend vẽ nút
+        List<ProductDetailResponse.OptionGroupDTO> optionGroups = product.getOptions().stream()
+                .map(opt -> ProductDetailResponse.OptionGroupDTO.builder()
+                        .name(opt.getName())
+                        .values(opt.getValues().stream().map(ProductOptionValue::getValue).toList())
+                        .build())
+                .toList();
 
-        // 4. Tính tổng tồn kho từ các biến thể [cite: 436]
-        int totalStock = product.getVariants().stream()
-                .mapToInt(ProductVariant::getStockQuantity)
-                .sum();
+        // 2. Map danh sách biến thể kèm thuộc tính
+        List<ProductDetailResponse.VariantDTO> variantDTOs = product.getVariants().stream()
+                .map(v -> {
+                    Map<String, String> attrs = new HashMap<>();
+                    v.getVariantOptionValues().forEach(vov ->
+                            attrs.put(vov.getOptionValue().getProductOption().getName(), vov.getOptionValue().getValue()));
 
-        // 5. Map dữ liệu sang DTO [cite: 384]
-        return ProductDetailResponse.builder()
+                    return ProductDetailResponse.VariantDTO.builder()
+                            .variantId(v.getVariantId())
+                            .sku(v.getSku())
+                            .price(v.getPrice())
+                            .stockQuantity(v.getStockQuantity())
+                            .imageUrl(v.getImageUrl())
+                            .attributes(attrs)
+                            .build();
+                }).toList();
+
+        // 3. Xây dựng Response cuối cùng
+        ProductDetailResponse detail = ProductDetailResponse.builder()
                 .productId(product.getProductId())
                 .name(product.getName())
                 .description(product.getDescription())
-                .brand(product.getBrand())
                 .basePrice(product.getBasePrice())
                 .shopName(product.getShop().getShopName())
-                .totalStock(totalStock)
-                .status(totalStock > 0 ? "Còn hàng" : "Hết hàng") // [Yêu cầu UC 3.2.2]
-                .variants(product.getVariants().stream().map(v ->
-                        ProductDetailResponse.VariantDTO.builder()
-                                .variantId(v.getVariantId())
-                                .sku(v.getSku())
-                                .price(v.getPrice())
-                                .stockQuantity(v.getStockQuantity())
-                                .imageUrl(v.getImageUrl())
-                                .build()
-                ).collect(Collectors.toList()))
-                .reviews(reviews.stream().map(r ->
-                        ProductDetailResponse.ReviewDTO.builder()
-                                .rating(r.getRating())
-                                .comment(r.getComment())
-                                .userName(r.getUser().getFullName())
-                                .build()
-                ).collect(Collectors.toList()))
+                .totalStock(variantDTOs.stream().mapToInt(v -> v.getStockQuantity()).sum())
+                .status("ACTIVE")
+                .optionGroups(optionGroups)
+                .variants(variantDTOs)
                 .build();
+
+        return BaseResponse.success_data("Lấy chi tiết sản phẩm thành công", detail);
     }
 }
