@@ -3,6 +3,7 @@ package com.gr6.SmartCart.modules.catalog.dto;
 import com.gr6.SmartCart.common.domain.Product;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,10 +18,11 @@ public class ProductResponse {
     private Long shopId;
     private String status;
     private List<VariantResponse> variants;
-
-    // --- 2 TRƯỜNG MỚI ĐƯỢC THÊM VÀO CHO SELLER ---
     private Double averageRating;
     private Integer soldQuantity;
+
+    // THÊM: Mảng ảnh trả về cho Seller
+    private List<String> images;
 
     public static ProductResponse fromEntity(Product product) {
         ProductResponse response = new ProductResponse();
@@ -31,11 +33,16 @@ public class ProductResponse {
         response.setBasePrice(product.getBasePrice());
         response.setCategoryId(product.getCategory().getCategoryId());
         response.setShopId(product.getShop().getShopId());
+
         if(product.getStatus() != null) {
             response.setStatus(product.getStatus().name());
         }
 
-        // Mặc định lúc mới tạo là 0 sao và 0 lượt bán
+        // THÊM LOGIC CẮT CHUỖI ẢNH (Từ Database) ĐỂ TRẢ VỀ DẠNG MẢNG
+        if (product.getImageUrls() != null && !product.getImageUrls().isEmpty()) {
+            response.setImages(Arrays.asList(product.getImageUrls().split(",")));
+        }
+
         response.setAverageRating(0.0);
         response.setSoldQuantity(0);
 

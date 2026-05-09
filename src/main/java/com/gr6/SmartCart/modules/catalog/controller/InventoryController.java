@@ -1,4 +1,5 @@
 package com.gr6.SmartCart.modules.catalog.controller;
+
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.modules.catalog.dto.InventoryUpdateRequest;
 import com.gr6.SmartCart.modules.catalog.service.InventoryService;
@@ -15,5 +16,11 @@ public class InventoryController {
     @PostMapping("/decrease")
     public BaseResponse<String> decreaseStock(@Valid @RequestBody InventoryUpdateRequest request) {
         return inventoryService.decreaseStock(request);
+    }
+
+    // SÁNG THÊM VÀO ĐÂY: API Cộng thêm hàng vào kho an toàn
+    @PostMapping("/increase")
+    public BaseResponse<String> increaseStock(@Valid @RequestBody InventoryUpdateRequest request) {
+        return inventoryService.increaseStock(request);
     }
 }

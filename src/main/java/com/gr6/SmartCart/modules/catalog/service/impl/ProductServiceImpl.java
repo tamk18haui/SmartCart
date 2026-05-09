@@ -18,16 +18,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
-
-    // Bơm 2 Repository tính Lượt bán và Đánh giá sao
     private final CatalogReviewRepository catalogReviewRepository;
     private final CatalogOrderItemRepository catalogOrderItemRepository;
+    private final ProductVariantRepository variantRepository;
 
     private Shop getCurrentShop() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -47,8 +48,6 @@ public class ProductServiceImpl implements ProductService {
     public BaseResponse<ProductResponse> createProduct(ProductRequest request) {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
-
-        // GIỮ CODE CỦA SÁNG: Lấy Shop từ Token để chặn lỗi IDOR bảo mật
         Shop currentShop = getCurrentShop();
 
         Product product = new Product();
@@ -65,7 +64,24 @@ public class ProductServiceImpl implements ProductService {
         product.setCategory(category);
         product.setShop(currentShop);
 
+        // SÁNG THÊM VÀO ĐÂY: Lưu nhiều ảnh lúc đăng mới
+        if (request.getUploadImages() != null && !request.getUploadImages().isEmpty()) {
+            String joinedImages = String.join(",", request.getUploadImages());
+            product.setImageUrls(joinedImages);
+        }
+
         Product savedProduct = productRepository.save(product);
+
+        ProductVariant defaultVariant = new ProductVariant();
+        defaultVariant.setProduct(savedProduct);
+        defaultVariant.setSku("SP" + savedProduct.getProductId() + "-DEFAULT");
+        defaultVariant.setPrice(savedProduct.getBasePrice());
+        defaultVariant.setStockQuantity(request.getStockQuantity());
+        ProductVariant savedVariant = variantRepository.save(defaultVariant);
+
+        savedProduct.setVariants(new ArrayList<>());
+        savedProduct.getVariants().add(savedVariant);
+
         return BaseResponse.success_data("Đã đăng sản phẩm thành công!", ProductResponse.fromEntity(savedProduct));
     }
 
@@ -76,17 +92,13 @@ public class ProductServiceImpl implements ProductService {
         Page<Product> productPage = productRepository.findByShopShopIdAndStatusNot(
                 shopId, ProductStatus.DELETED, pageable
         );
-
         Page<ProductResponse> responsePage = productPage.map(product -> {
             ProductResponse res = ProductResponse.fromEntity(product);
-
             Double avgRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
             res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
-
             res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(product.getProductId(), OrderStatus.DELIVERED));
             return res;
         });
-
         return BaseResponse.success_data("Lấy danh sách sản phẩm thành công", PageResponse.of(responsePage));
     }
 
@@ -95,15 +107,12 @@ public class ProductServiceImpl implements ProductService {
     public BaseResponse<String> deleteProduct(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm để xóa"));
-
         Shop currentShop = getCurrentShop();
         if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
             return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền xóa sản phẩm của người khác!");
         }
-
         product.setStatus(ProductStatus.DELETED);
         productRepository.save(product);
-
         return BaseResponse.successMessage("Đã xóa sản phẩm thành công!");
     }
 
@@ -112,7 +121,6 @@ public class ProductServiceImpl implements ProductService {
     public BaseResponse<ProductResponse> updateProduct(Long productId, ProductRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm!"));
-
         Shop currentShop = getCurrentShop();
         if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
             return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền sửa sản phẩm của người khác!");
@@ -132,7 +140,25 @@ public class ProductServiceImpl implements ProductService {
         product.setHeight(request.getHeight());
         product.setCategory(category);
 
+        // SÁNG THÊM VÀO ĐÂY: Lưu nhiều ảnh lúc cập nhật
+        if (request.getUploadImages() != null && !request.getUploadImages().isEmpty()) {
+            String joinedImages = String.join(",", request.getUploadImages());
+            product.setImageUrls(joinedImages);
+        }
+
         Product updatedProduct = productRepository.save(product);
+
+        // SÁNG THÊM VÀO ĐÂY: Vá lỗi đồng bộ giá cho phân loại mặc định
+        if (updatedProduct.getVariants() != null) {
+            updatedProduct.getVariants().stream()
+                    .filter(v -> v.getSku().endsWith("-DEFAULT"))
+                    .findFirst()
+                    .ifPresent(v -> {
+                        v.setPrice(request.getBasePrice());
+                        variantRepository.save(v);
+                    });
+        }
+
         return BaseResponse.success_data("Cập nhật sản phẩm thành công!", ProductResponse.fromEntity(updatedProduct));
     }
 
@@ -141,23 +167,18 @@ public class ProductServiceImpl implements ProductService {
     public BaseResponse<ProductResponse> getProductForSeller(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm!"));
-
         Shop currentShop = getCurrentShop();
         if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
             return BaseResponse.error(403, "Bạn không có quyền truy cập sản phẩm này!");
         }
-
         if (product.getStatus() == ProductStatus.DELETED) {
             return BaseResponse.error(404, "Sản phẩm này đã bị xóa!");
         }
 
         ProductResponse res = ProductResponse.fromEntity(product);
-
         Double avgRating = catalogReviewRepository.getAverageRatingByProductId(productId);
         res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
-
         res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(productId, OrderStatus.DELIVERED));
-
         return BaseResponse.success_data("Lấy chi tiết thành công", res);
     }
 }

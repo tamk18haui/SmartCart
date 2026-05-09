@@ -8,4 +8,8 @@ import java.util.List;
 public interface CategoryService {
     BaseResponse<CategoryResponse> createCategory(CategoryRequest request);
     BaseResponse<List<CategoryResponse>> getAllCategories();
+
+    // SÁNG THÊM VÀO ĐÂY:
+    BaseResponse<CategoryResponse> updateCategory(Long id, CategoryRequest request);
+    BaseResponse<String> toggleCategoryStatus(Long id);
 }

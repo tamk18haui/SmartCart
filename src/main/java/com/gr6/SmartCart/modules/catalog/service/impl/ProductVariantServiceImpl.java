@@ -93,7 +93,6 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     public BaseResponse<VariantResponse> updateVariant(Long variantId, VariantCreateRequest request) {
         ProductVariant variant = variantRepository.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
-
         Shop currentShop = getCurrentShop();
         if (!variant.getProduct().getShop().getShopId().equals(currentShop.getShopId())) {
             return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền sửa biến thể này!");
@@ -117,13 +116,16 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     public BaseResponse<String> deleteVariant(Long variantId) {
         ProductVariant variant = variantRepository.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
-
         Shop currentShop = getCurrentShop();
         if (!variant.getProduct().getShop().getShopId().equals(currentShop.getShopId())) {
             return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền xóa biến thể này!");
         }
 
-        // CHỐT CHẶN: Dùng Try-Catch để bắt lỗi Constraint Violation nếu biến thể đã có trong Đơn hàng
+        // SÁNG THÊM VÀO ĐÂY: Vá lỗi xóa sạch phân loại khiến sản phẩm bị "chết"
+        if (variant.getProduct().getVariants() != null && variant.getProduct().getVariants().size() <= 1) {
+            return BaseResponse.error(400, "Không thể xóa phân loại cuối cùng! Nếu hết hàng, vui lòng cập nhật Tồn kho về 0.");
+        }
+
         try {
             variantRepository.deleteById(variantId);
             return BaseResponse.successMessage("Xóa biến thể thành công!");

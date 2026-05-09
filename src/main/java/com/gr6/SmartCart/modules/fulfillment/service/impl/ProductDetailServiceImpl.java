@@ -15,13 +15,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor // Sử dụng thay cho Autowired lẻ tẻ
+@RequiredArgsConstructor
 public class ProductDetailServiceImpl implements ProductDetailService {
 
     private final ProductRepository productRepository;
@@ -62,12 +64,24 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                             .build();
                 }).toList();
 
+
+        // ==========================================================
+        // SÁNG SỬA VÀO ĐÂY: Xử lý cắt chuỗi ảnh để trả về dạng Mảng
+        // ==========================================================
+        List<String> listImages = new ArrayList<>();
+        if (product.getImageUrls() != null && !product.getImageUrls().isEmpty()) {
+            // Lấy chuỗi từ CSDL (vd: "link1,link2,link3") cắt ra bằng dấu phẩy
+            listImages = Arrays.asList(product.getImageUrls().split(","));
+        }
+
         // 3. Xây dựng Response cuối cùng
         ProductDetailResponse detail = ProductDetailResponse.builder()
                 .productId(product.getProductId())
                 .name(product.getName())
                 .description(product.getDescription())
                 .basePrice(product.getBasePrice())
+                // SÁNG SỬA VÀO ĐÂY: Truyền listImages vào DTO để Frontend hiển thị slider nhiều ảnh
+                .imageUrls(listImages)
                 .shopName(product.getShop().getShopName())
                 .totalStock(variantDTOs.stream().mapToInt(v -> v.getStockQuantity()).sum())
                 .status("ACTIVE")

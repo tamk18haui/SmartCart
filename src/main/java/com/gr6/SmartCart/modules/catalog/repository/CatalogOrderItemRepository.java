@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CatalogOrderItemRepository extends JpaRepository<OrderItem, Long> {
 
-    // Tính tổng số lượng hàng đã bán (Chỉ lấy đơn DELIVERED)
+    // Tính tổng số lượng hàng đã bán (Chỉ tính đơn DELIVERED)
     @Query("SELECT COALESCE(SUM(oi.quantity), 0) FROM OrderItem oi WHERE oi.variant.product.productId = :productId AND oi.shopOrder.status = :status")
     Integer getSoldQuantityByProductId(@Param("productId") Long productId, @Param("status") OrderStatus status);
 }
