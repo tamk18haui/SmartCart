@@ -1,4 +1,5 @@
 package com.gr6.SmartCart.modules.catalog.controller;
+
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.modules.catalog.dto.CategoryRequest;
 import com.gr6.SmartCart.modules.catalog.dto.CategoryResponse;
@@ -22,5 +23,17 @@ public class CategoryController {
     @GetMapping
     public BaseResponse<List<CategoryResponse>> getAllCategories() {
         return categoryService.getAllCategories();
+    }
+
+    // SÁNG THÊM VÀO ĐÂY: Sửa danh mục
+    @PutMapping("/{id}")
+    public BaseResponse<CategoryResponse> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryRequest request) {
+        return categoryService.updateCategory(id, request);
+    }
+
+    // SÁNG THÊM VÀO ĐÂY: Ẩn/Hiện danh mục thay vì xóa
+    @PatchMapping("/{id}/toggle-status")
+    public BaseResponse<String> toggleCategoryStatus(@PathVariable Long id) {
+        return categoryService.toggleCategoryStatus(id);
     }
 }

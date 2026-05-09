@@ -6,11 +6,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class ProductRequest {
     @NotBlank(message = "Tên sản phẩm không được để trống")
     private String name;
+
     private String description;
     private String brand;
     private ProductCondition condition;
@@ -38,8 +40,10 @@ public class ProductRequest {
     @NotNull(message = "ID danh mục không được để trống")
     private Long categoryId;
 
-    // THÊM TRƯỜNG NÀY: Để nhận số lượng tồn kho ban đầu từ người bán
     @NotNull(message = "Số lượng tồn kho ban đầu không được để trống")
     @Min(value = 0, message = "Tồn kho không được âm")
     private Integer stockQuantity;
+
+    // THÊM TRƯỜNG NÀY: Nhận danh sách link ảnh (do Frontend đã upload lên Cloudinary)
+    private List<String> uploadImages;
 }

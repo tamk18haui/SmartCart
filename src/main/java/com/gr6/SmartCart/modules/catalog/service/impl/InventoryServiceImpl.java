@@ -17,8 +17,6 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public BaseResponse<String> decreaseStock(InventoryUpdateRequest request) {
-
-        // ĐÃ SỬA: Gọi hàm findByIdWithLock thay vì findById bình thường
         ProductVariant variant = productVariantRepository.findByIdWithLock(request.getVariantId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
 
@@ -29,5 +27,18 @@ public class InventoryServiceImpl implements InventoryService {
         variant.setStockQuantity(variant.getStockQuantity() - request.getQuantity());
         productVariantRepository.save(variant);
         return BaseResponse.successMessage("Đã trừ kho thành công!");
+    }
+
+    // SÁNG THÊM VÀO ĐÂY: Logic cộng thêm hàng có khóa Lock an toàn
+    @Override
+    @Transactional
+    public BaseResponse<String> increaseStock(InventoryUpdateRequest request) {
+        ProductVariant variant = productVariantRepository.findByIdWithLock(request.getVariantId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
+
+        variant.setStockQuantity(variant.getStockQuantity() + request.getQuantity());
+        productVariantRepository.save(variant);
+
+        return BaseResponse.successMessage("Đã cộng thêm " + request.getQuantity() + " sản phẩm vào kho!");
     }
 }
