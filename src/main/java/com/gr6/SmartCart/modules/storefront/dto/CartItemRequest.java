@@ -1,12 +1,12 @@
 package com.gr6.SmartCart.modules.storefront.dto;
 
 public class CartItemRequest {
-    private Long productId;
+    private Long variantId;
     private Integer quantity;
     
     // Getters and Setters
-    public Long getProductId() { return productId; }
-    public void setProductId(Long productId) { this.productId = productId; }
+    public Long getVariantId() { return this.variantId; }
+    public void setVariantId(Long variantId) { this.variantId = variantId; }
     
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
