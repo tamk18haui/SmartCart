@@ -19,4 +19,8 @@ public class ShopManagementController {
     public BaseResponse updateShop(@Valid @RequestBody ShopManagerRequest request) {
         return shopManagerService.updateShop(request);
     }
+    @GetMapping("/info")
+    public BaseResponse getShop() {
+        return shopManagerService.getShopInfo();
+    }
 }
