@@ -32,14 +32,16 @@ public class SecurityFilterChainConfig {
                                 "/api/v1/auth/**",
                                 "/api/v1/shops/register",
                                 "/api/storefront/**",
-                                "/api/v1/fulfillment/product/**"
+                                "/api/v1/fulfillment/product/**",
+                                "/api/v2/auth/**",
+                                "/api/v2/user/profile"
                         ).permitAll()
 
                         // 2. API xem danh mục dành cho khách vãng lai (từ Sáng)
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories").permitAll()
 
                         // 3. Các quyền hạn dành riêng cho SELLER (Người bán)
-                        .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
+                        .requestMatchers("/api/v1/shops/**").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasRole("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasRole("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasRole("SELLER")

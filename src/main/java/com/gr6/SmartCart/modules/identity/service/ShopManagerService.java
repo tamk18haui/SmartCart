@@ -10,4 +10,5 @@ public interface ShopManagerService {
      */
     @Transactional
     BaseResponse updateShop(ShopManagerRequest request);
+    BaseResponse getShopInfo();
 }
