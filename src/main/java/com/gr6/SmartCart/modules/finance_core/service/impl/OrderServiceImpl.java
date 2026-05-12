@@ -14,6 +14,7 @@ import com.gr6.SmartCart.modules.finance_core.service.OrderService;
 import com.gr6.SmartCart.modules.finance_core.service.VoucherService;
 import com.gr6.SmartCart.modules.identity.repository.ShopRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.modules.storefront.repository.CartItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,31 +41,33 @@ public class OrderServiceImpl implements OrderService {
     private final ShopRepository shopRepository;
     private final VoucherService voucherService;
 
-    // 1. Lấy thông tin User đang đăng nhập
+    private final CartItemRepository cartItemRepository;
+
+    // 1. Lấy thông tin User đang đăng nhập an toàn
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new RuntimeException("Chưa đăng nhập hệ thống!"));
+                .orElseThrow(() -> new RuntimeException("Lỗi xác thực: Chưa đăng nhập hệ thống!"));
     }
 
-    // 2. Xử lý địa chỉ
+    // 2. Logic Xử lý địa chỉ có Fallback chuẩn
     private Address resolveAddress(Long requestAddressId, User user) {
         if (requestAddressId != null) {
             Address address = addressRepository.findById(requestAddressId)
                     .orElseThrow(() -> new RuntimeException("Địa chỉ không tồn tại!"));
-            if (!address.getUser().getUserId().equals(user.getUserId()) || address.getIsDeleted()) {
+            if (!address.getUser().getUserId().equals(user.getUserId()) || (address.getIsDeleted() != null && address.getIsDeleted())) {
                 throw new RuntimeException("Địa chỉ không hợp lệ hoặc đã bị xóa!");
             }
             return address;
         } else {
             List<Address> userAddresses = addressRepository.findByUser(user).stream()
-                    .filter(a -> !a.getIsDeleted())
+                    .filter(a -> a.getIsDeleted() == null || !a.getIsDeleted())
                     .toList();
 
             if (userAddresses.isEmpty()) return null;
 
             return userAddresses.stream()
-                    .filter(Address::getIsDefault)
+                    .filter(a -> a.getIsDefault() != null && a.getIsDefault())
                     .findFirst()
                     .orElse(userAddresses.get(0));
         }
@@ -98,9 +102,9 @@ public class OrderServiceImpl implements OrderService {
                 String optionValuesStr = "";
                 if (variant.getVariantOptionValues() != null) {
                     optionValuesStr = variant.getVariantOptionValues().stream()
+                            .filter(v -> v.getOptionValue() != null)
                             .map(v -> v.getOptionValue().getValue())
-                            .reduce((a, b) -> a + ", " + b)
-                            .orElse("");
+                            .collect(Collectors.joining(", "));
                 }
 
                 long price = variant.getPrice().longValue();
@@ -116,7 +120,7 @@ public class OrderServiceImpl implements OrderService {
             }
 
             long discount = voucherService.calculateDiscount(shopReq.getVoucherCode(), shopSubtotal, shop.getShopId(), user.getUserId());
-            long shippingFee = 30000L; // TODO: Đẩy con số này ra file config cấu hình sau
+            long shippingFee = 30000L; // Phí ship cứng 30k
             long finalShopTotal = Math.max(0, shopSubtotal + shippingFee - discount);
 
             grandTotalItemPrice += shopSubtotal;
@@ -157,7 +161,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     // =================================================================
-    // API 2: CHỐT ĐƠN VÀ TRỪ KHO (Checkout)
+    // API 2: CHỐT ĐƠN VÀ TRỪ KHO ĐỘC QUYỀN (Checkout)
     // =================================================================
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -169,22 +173,41 @@ public class OrderServiceImpl implements OrderService {
         }
         Address address = resolveAddress(request.getAddressId(), user);
 
-        // BƯỚC 1: TÍNH TOÁN NHANH TIỀN BẠC TRƯỚC KHI TẠO ĐƠN
+        // ---------------------------------------------------------
+        // BƯỚC 1: LỌC ID SẢN PHẨM & SẮP XẾP ĐỂ CHỐNG DEADLOCK
+        // (Đây là tuyệt kỹ quan trọng nhất của hệ thống)
+        // ---------------------------------------------------------
+        List<Long> variantIdsToLock = request.getShopOrders().stream()
+                .flatMap(shopDto -> shopDto.getItems().stream())
+                .map(CreateOrderRequest.OrderItemDto::getVariantId)
+                .distinct()
+                .sorted() // <--- Lệnh này cứu hệ thống khỏi Deadlock
+                .toList();
+
+        Map<Long, ProductVariant> lockedVariantsMap = new HashMap<>();
+        for (Long vId : variantIdsToLock) {
+            ProductVariant variant = variantRepository.findByIdWithLock(vId)
+                    .orElseThrow(() -> new RuntimeException("Lỗi: Không tìm thấy sản phẩm có ID " + vId));
+            lockedVariantsMap.put(vId, variant);
+        }
+
+        // ---------------------------------------------------------
+        // BƯỚC 2: TÍNH TIỀN NHANH (Sử dụng RAM, không đụng CSDL nữa)
+        // ---------------------------------------------------------
         Map<Long, Long> shopSubtotalMap = new HashMap<>();
         Map<Long, Long> discountMap = new HashMap<>();
 
         for (CreateOrderRequest.ShopOrderDto shopDto : request.getShopOrders()) {
             long subtotal = 0L;
-
             for (CreateOrderRequest.OrderItemDto item : shopDto.getItems()) {
-                // Chỉ đọc thông thường để tính tiền
-                ProductVariant variant = variantRepository.findById(item.getVariantId())
-                        .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể sản phẩm!"));
+                ProductVariant variant = lockedVariantsMap.get(item.getVariantId());
 
                 if (!variant.getProduct().getShop().getShopId().equals(shopDto.getShopId())) {
-                    throw new RuntimeException("Sản phẩm không thuộc cửa hàng này!");
+                    throw new RuntimeException("Cảnh báo bảo mật: Sản phẩm không thuộc cửa hàng này!");
                 }
-
+                if (variant.getStockQuantity() < item.getQuantity()) {
+                    throw new RuntimeException("Sản phẩm '" + variant.getProduct().getName() + "' đã hết hàng hoặc không đủ số lượng!");
+                }
                 subtotal += variant.getPrice().longValue() * item.getQuantity();
             }
 
@@ -193,7 +216,9 @@ public class OrderServiceImpl implements OrderService {
             discountMap.put(shopDto.getShopId(), discount);
         }
 
-        // BƯỚC 2: TẠO ĐƠN HÀNG GỐC
+        // ---------------------------------------------------------
+        // BƯỚC 3: TẠO ĐƠN HÀNG GỐC (ORDER)
+        // ---------------------------------------------------------
         Order order = new Order();
         order.setUser(user);
         order.setReceiverName(address.getReceiverName());
@@ -206,8 +231,11 @@ public class OrderServiceImpl implements OrderService {
         order = orderRepository.save(order);
 
         BigDecimal grandTotal = BigDecimal.ZERO;
+        List<OrderItem> allOrderItems = new ArrayList<>();
 
-        // BƯỚC 3: TRỪ TỒN KHO AN TOÀN VÀ LƯU CHI TIẾT
+        // ---------------------------------------------------------
+        // BƯỚC 4: TRỪ KHO VÀ TẠO ĐƠN HÀNG CON (SHOP_ORDER)
+        // ---------------------------------------------------------
         for (CreateOrderRequest.ShopOrderDto shopDto : request.getShopOrders()) {
             Shop shop = shopRepository.findById(shopDto.getShopId())
                     .orElseThrow(() -> new RuntimeException("Cửa hàng không tồn tại!"));
@@ -216,23 +244,15 @@ public class OrderServiceImpl implements OrderService {
             shopOrder.setOrder(order);
             shopOrder.setShop(shop);
             shopOrder.setShippingFee(30000L);
+            shopOrder.setStatus(OrderStatus.PENDING);
 
             long subtotal = shopSubtotalMap.get(shopDto.getShopId());
             long discount = discountMap.get(shopDto.getShopId());
 
-            List<OrderItem> items = new ArrayList<>();
-
             for (CreateOrderRequest.OrderItemDto item : shopDto.getItems()) {
-                // SỬA LỖI CHÍ MẠNG: Khóa Row ngay lúc này để giành quyền trừ kho độc quyền
-                ProductVariant variant = variantRepository.findByIdWithLock(item.getVariantId())
-                        .orElseThrow(() -> new RuntimeException("Lỗi dữ liệu: Sản phẩm đã bị xóa hoặc ẩn khỏi hệ thống!"));
+                ProductVariant variant = lockedVariantsMap.get(item.getVariantId());
 
-                // Kiểm tra Tồn kho LẠI MỘT LẦN NỮA sau khi đã có khóa
-                if (variant.getStockQuantity() < item.getQuantity()) {
-                    throw new RuntimeException("Sản phẩm '" + variant.getProduct().getName() + "' đã hết hàng hoặc không đủ số lượng!");
-                }
-
-                // Trừ tồn kho an toàn
+                // Trừ kho an toàn
                 variant.setStockQuantity(variant.getStockQuantity() - item.getQuantity());
                 variantRepository.save(variant);
 
@@ -241,7 +261,7 @@ public class OrderServiceImpl implements OrderService {
                 oi.setVariant(variant);
                 oi.setQuantity(item.getQuantity());
                 oi.setPriceAtPurchase(variant.getPrice().longValue());
-                items.add(oi);
+                allOrderItems.add(oi);
             }
 
             long finalTotal = subtotal + shopOrder.getShippingFee() - discount;
@@ -249,17 +269,31 @@ public class OrderServiceImpl implements OrderService {
             shopOrder.setTotalAmount(Math.max(0, finalTotal));
 
             shopOrderRepository.save(shopOrder);
-            orderItemRepository.saveAll(items);
 
             // Chốt sử dụng Voucher
             voucherService.useVoucher(shopDto.getVoucherCode(), user.getUserId());
+
             grandTotal = grandTotal.add(BigDecimal.valueOf(finalTotal));
         }
 
+        orderItemRepository.saveAll(allOrderItems);
         order.setTotalAmount(grandTotal);
         orderRepository.save(order);
 
-        // BƯỚC 4: XỬ LÝ PHƯƠNG THỨC THANH TOÁN
+        // ---------------------------------------------------------
+        // BƯỚC 5: XÓA SẢN PHẨM KHỎI GIỎ HÀNG
+        // ---------------------------------------------------------
+        List<CartItem> userCartItems = cartItemRepository.findByUser_UserId(user.getUserId());
+        if (userCartItems != null && !userCartItems.isEmpty()) {
+            List<CartItem> itemsToDelete = userCartItems.stream()
+                    .filter(c -> c.getVariant() != null && lockedVariantsMap.containsKey(c.getVariant().getVariantId()))
+                    .toList();
+            cartItemRepository.deleteAll(itemsToDelete);
+        }
+
+        // ---------------------------------------------------------
+        // BƯỚC 6: XỬ LÝ THANH TOÁN (Trừu tượng hóa MoMo)
+        // ---------------------------------------------------------
         if (request.getPaymentMethod() == PaymentMethod.ONLINE) {
             String momoPaymentUrl = "https://test-payment.momo.vn/v2/gateway/api/create?orderId="
                     + order.getOrderId() + "&amount=" + grandTotal.longValue();
