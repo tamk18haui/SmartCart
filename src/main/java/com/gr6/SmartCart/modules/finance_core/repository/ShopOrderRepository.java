@@ -1,6 +1,7 @@
 package com.gr6.SmartCart.modules.finance_core.repository;
 
 import com.gr6.SmartCart.common.domain.ShopOrder;
+import com.gr6.SmartCart.common.enums.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,5 +14,9 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             "OR CAST(o.shopOrderId AS string) LIKE %:keyword% " +
             "OR LOWER(o.order.receiverName) LIKE LOWER(CONCAT('%', :keyword, '%')))") // Lấy từ o.order.receiverName
     List<ShopOrder> searchOrdersByShop(@Param("email") String email, @Param("keyword") String keyword);
+
+    List<ShopOrder> findByOrder_OrderId(Long orderId);
+
+    List<ShopOrder> findByOrder_OrderIdAndStatus(Long orderId, OrderStatus status);
     List<ShopOrder> findByOrder_User_EmailOrderByShopOrderIdDesc(String email);
 }

@@ -1,5 +1,6 @@
 package com.gr6.SmartCart.modules.storefront.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,4 +18,7 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
     // THÊM MỚI: Tìm chính xác 1 item trong giỏ của người dùng cụ thể
     Optional<CartItem> findByCartItemIdAndUser_UserId(Long cartItemId, Long userId);
+
+    void deleteByUser_UserIdAndVariant_VariantIdIn(Long userId, Collection<Long> variantIds);
+
 }

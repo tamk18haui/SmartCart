@@ -1,8 +1,6 @@
 package com.gr6.SmartCart.common.domain;
 
-import com.gr6.SmartCart.common.enums.OrderStatus;
-import com.gr6.SmartCart.common.enums.PaymentMethod;
-import com.gr6.SmartCart.common.enums.PaymentStatus;
+import com.gr6.SmartCart.common.enums.*;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.Getter;
@@ -37,6 +35,14 @@ public class Order {
     @Enumerated(EnumType.STRING) @Column(length = 50)
     private PaymentMethod paymentMethod;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private CheckoutSource checkoutSource;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private PaymentProvider paymentProvider;
+
     @Enumerated(EnumType.STRING) @Column(length = 50)
     private PaymentStatus paymentStatus;
 
@@ -54,4 +60,5 @@ public class Order {
 
     @OneToOne(mappedBy = "order")
     private Review review;
+
 }
