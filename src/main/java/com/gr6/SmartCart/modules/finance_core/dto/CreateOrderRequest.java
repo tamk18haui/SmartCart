@@ -1,6 +1,8 @@
 package com.gr6.SmartCart.modules.finance_core.dto;
 
+import com.gr6.SmartCart.common.enums.CheckoutSource;
 import com.gr6.SmartCart.common.enums.PaymentMethod;
+import com.gr6.SmartCart.common.enums.PaymentProvider;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
@@ -11,18 +13,35 @@ import java.util.List;
 
 @Data
 public class CreateOrderRequest {
+
     @NotNull(message = "Vui lòng chọn địa chỉ giao hàng")
     private Long addressId;
 
     @NotNull(message = "Vui lòng chọn phương thức thanh toán")
     private PaymentMethod paymentMethod;
 
+    /**
+     * COD: có thể để NONE hoặc null.
+     * ONLINE: bắt buộc MOMO hoặc VNPAY.
+     */
+    private PaymentProvider paymentProvider;
+
+    @NotNull(message = "Vui lòng chọn nguồn mua hàng")
+    private CheckoutSource checkoutSource;
+
+    /**
+     * Để sẵn cho chống double-click tạo trùng đơn.
+     * Bản này chưa enforce unique DB.
+     */
+    private String checkoutToken;
+
     @Valid
-    @NotEmpty (message = "Đơn hàng phải có ít nhất 1 sản phẩm")
-    private List<ShopOrderDto> shopOrders;
+    @NotEmpty(message = "Danh sách đơn hàng không được để trống")
+    private List<ShopOrderRequest> shopOrders;
 
     @Data
-    public static class ShopOrderDto {
+    public static class ShopOrderRequest {
+
         @NotNull(message = "Thiếu thông tin shop")
         private Long shopId;
 
@@ -30,10 +49,12 @@ public class CreateOrderRequest {
 
         @Valid
         @NotEmpty(message = "Shop này chưa có sản phẩm nào")
-        private List<OrderItemDto> items;
+        private List<ItemRequest> items;
     }
+
     @Data
-    public static class OrderItemDto {
+    public static class ItemRequest {
+
         @NotNull(message = "Thiếu thông tin biến thể sản phẩm")
         private Long variantId;
 
