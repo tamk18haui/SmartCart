@@ -13,5 +13,5 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             "OR CAST(o.shopOrderId AS string) LIKE %:keyword% " +
             "OR LOWER(o.order.receiverName) LIKE LOWER(CONCAT('%', :keyword, '%')))") // Lấy từ o.order.receiverName
     List<ShopOrder> searchOrdersByShop(@Param("email") String email, @Param("keyword") String keyword);
-
+    List<ShopOrder> findByOrder_User_EmailOrderByShopOrderIdDesc(String email);
 }
