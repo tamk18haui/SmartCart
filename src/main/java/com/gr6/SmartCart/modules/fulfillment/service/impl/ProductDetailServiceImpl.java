@@ -2,25 +2,27 @@ package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.domain.ProductOption;
 import com.gr6.SmartCart.common.domain.ProductOptionValue;
 import com.gr6.SmartCart.common.domain.ProductVariant;
 import com.gr6.SmartCart.common.domain.Review;
+import com.gr6.SmartCart.common.enums.CategoryStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
+import com.gr6.SmartCart.common.enums.ShopStatus;
+import com.gr6.SmartCart.common.enums.VariantStatus;
 import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
 import com.gr6.SmartCart.modules.fulfillment.dto.ProductDetailResponse;
 import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
-
 import com.gr6.SmartCart.modules.fulfillment.service.ProductDetailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -35,60 +37,121 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại!"));
 
-        if (product.getStatus() == ProductStatus.HIDDEN || product.getStatus() == ProductStatus.DELETED) {
+        if (!isSellableProduct(product)) {
             return BaseResponse.error(404, "Sản phẩm hiện không khả dụng.");
         }
 
-        // 1. Nhóm các Option (Màu sắc, Kích cỡ) để Frontend vẽ nút
-        List<ProductDetailResponse.OptionGroupDTO> optionGroups = product.getOptions().stream()
-                .map(opt -> ProductDetailResponse.OptionGroupDTO.builder()
-                        .name(opt.getName())
-                        .values(opt.getValues().stream().map(ProductOptionValue::getValue).toList())
-                        .build())
+        List<ProductVariant> activeVariants = safeList(product.getVariants()).stream()
+                .filter(v -> v.getStatus() == VariantStatus.ACTIVE)
                 .toList();
 
-        // 2. Map danh sách biến thể kèm thuộc tính
-        List<ProductDetailResponse.VariantDTO> variantDTOs = product.getVariants().stream()
-                .map(v -> {
-                    Map<String, String> attrs = new HashMap<>();
-                    v.getVariantOptionValues().forEach(vov ->
-                            attrs.put(vov.getOptionValue().getProductOption().getName(), vov.getOptionValue().getValue()));
-
-                    return ProductDetailResponse.VariantDTO.builder()
-                            .variantId(v.getVariantId())
-                            .sku(v.getSku())
-                            .price(v.getPrice())
-                            .stockQuantity(v.getStockQuantity())
-                            .imageUrl(v.getImageUrl())
-                            .attributes(attrs)
-                            .build();
-                }).toList();
-
-
-        // ==========================================================
-        // SÁNG SỬA VÀO ĐÂY: Xử lý cắt chuỗi ảnh để trả về dạng Mảng
-        // ==========================================================
-        List<String> listImages = new ArrayList<>();
-        if (product.getImageUrls() != null && !product.getImageUrls().isEmpty()) {
-            // Lấy chuỗi từ CSDL (vd: "link1,link2,link3") cắt ra bằng dấu phẩy
-            listImages = Arrays.asList(product.getImageUrls().split(","));
+        if (activeVariants.isEmpty()) {
+            return BaseResponse.error(404, "Sản phẩm hiện không còn phân loại khả dụng.");
         }
 
-        // 3. Xây dựng Response cuối cùng
-        ProductDetailResponse detail = ProductDetailResponse.builder()
+        List<ProductDetailResponse.OptionGroupDTO> optionGroups = safeList(product.getOptions()).stream()
+                .filter(Objects::nonNull)
+                .map(this::mapOptionGroup)
+                .toList();
+
+        List<ProductDetailResponse.VariantDTO> variantDTOs = activeVariants.stream()
+                .map(this::mapVariant)
+                .toList();
+
+        List<ProductDetailResponse.ReviewDTO> reviewDTOs = reviewRepository.findByProductId(productId).stream()
+                .map(this::mapReview)
+                .toList();
+
+        int totalStock = activeVariants.stream()
+                .map(ProductVariant::getStockQuantity)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        ProductDetailResponse response = ProductDetailResponse.builder()
                 .productId(product.getProductId())
                 .name(product.getName())
                 .description(product.getDescription())
+                .brand(product.getBrand())
                 .basePrice(product.getBasePrice())
-                // SÁNG SỬA VÀO ĐÂY: Truyền listImages vào DTO để Frontend hiển thị slider nhiều ảnh
-                .imageUrls(listImages)
-                .shopName(product.getShop().getShopName())
-                .totalStock(variantDTOs.stream().mapToInt(v -> v.getStockQuantity()).sum())
-                .status("ACTIVE")
+                .imageUrls(splitImageUrls(product.getImageUrls()))
+                .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
+                .totalStock(totalStock)
+                .status(product.getStatus() != null ? product.getStatus().name() : null)
                 .optionGroups(optionGroups)
                 .variants(variantDTOs)
+                .reviews(reviewDTOs)
                 .build();
 
-        return BaseResponse.success_data("Lấy chi tiết sản phẩm thành công", detail);
+        return BaseResponse.success_data("Lấy chi tiết sản phẩm thành công", response);
+    }
+
+    private boolean isSellableProduct(Product product) {
+        if (product.getStatus() != ProductStatus.ACTIVE) {
+            return false;
+        }
+        if (product.getShop() == null || product.getShop().getStatus() != ShopStatus.ACTIVE) {
+            return false;
+        }
+        return product.getCategory() != null && product.getCategory().getCategoryStatus() == CategoryStatus.ACTIVE;
+    }
+
+    private ProductDetailResponse.OptionGroupDTO mapOptionGroup(ProductOption option) {
+        List<String> values = safeList(option.getValues()).stream()
+                .filter(Objects::nonNull)
+                .map(ProductOptionValue::getValue)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        return ProductDetailResponse.OptionGroupDTO.builder()
+                .name(option.getName())
+                .values(values)
+                .build();
+    }
+
+    private ProductDetailResponse.VariantDTO mapVariant(ProductVariant variant) {
+        Map<String, String> attributes = new HashMap<>();
+
+        safeList(variant.getVariantOptionValues()).forEach(link -> {
+            if (link == null || link.getOptionValue() == null || link.getOptionValue().getProductOption() == null) {
+                return;
+            }
+            attributes.put(
+                    link.getOptionValue().getProductOption().getName(),
+                    link.getOptionValue().getValue()
+            );
+        });
+
+        return ProductDetailResponse.VariantDTO.builder()
+                .variantId(variant.getVariantId())
+                .sku(variant.getSku())
+                .price(variant.getPrice())
+                .stockQuantity(variant.getStockQuantity())
+                .imageUrl(variant.getImageUrl())
+                .attributes(attributes)
+                .build();
+    }
+
+    private ProductDetailResponse.ReviewDTO mapReview(Review review) {
+        return ProductDetailResponse.ReviewDTO.builder()
+                .rating(review.getRating())
+                .comment(review.getComment())
+                .userName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng")
+                .build();
+    }
+
+    private List<String> splitImageUrls(String imageUrls) {
+        if (imageUrls == null || imageUrls.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(imageUrls.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .toList();
+    }
+
+    private <T> List<T> safeList(List<T> list) {
+        return list == null ? List.of() : list;
     }
 }

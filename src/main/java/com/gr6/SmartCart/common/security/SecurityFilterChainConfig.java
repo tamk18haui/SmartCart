@@ -23,28 +23,54 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Gộp chung các endpoint công khai: Swagger, Auth, và Storefront (từ Sáng)
-                        // Bao gồm cả endpoint fulfillment/product từ phiên bản local của bạn
+                        // API public
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/auth/**",
                                 "/api/v1/shops/register",
+
+                                // Storefront public đúng version API hiện tại.
+                                // DiscoveryController đang chạy ở /api/v1/storefront/discovery.
+                                "/api/v1/storefront/discovery/**",
+
+                                // Giữ lại path cũ để không làm vỡ frontend nếu trước đó có gọi.
                                 "/api/storefront/**",
+
+                                // Chi tiết sản phẩm public.
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
 
-                        // 2. API xem danh mục dành cho khách vãng lai (từ Sáng)
+                        // Danh mục: public GET, còn tạo/sửa/ẩn hiện là ADMIN
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/categories").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/categories/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/categories/**").hasAuthority("ADMIN")
 
-                        // 3. Các quyền hạn dành riêng cho SELLER (Người bán)
+                        // Admin
+                        .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
+
+                        // Seller/Admin inventory
+                        .requestMatchers("/api/v1/inventory/**").hasAnyAuthority("SELLER", "ADMIN")
+
+                        // Seller product management
+                        .requestMatchers(HttpMethod.POST, "/api/v1/products").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/products/seller/**").hasAuthority("SELLER")
+
+                        // Seller variant management
+                        .requestMatchers(HttpMethod.POST, "/api/v1/variants").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/variants/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/variants/**").hasAuthority("SELLER")
+
+                        // Seller shop/order management
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasRole("SELLER")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasRole("SELLER")
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasRole("SELLER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasAuthority("SELLER")
 
-                        // 4. Các yêu cầu còn lại đều phải xác thực
                         .anyRequest().authenticated()
                 );
 

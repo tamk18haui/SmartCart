@@ -1,54 +1,131 @@
 package com.gr6.SmartCart.modules.catalog.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.*;
-import com.gr6.SmartCart.modules.catalog.dto.*;
-import com.gr6.SmartCart.modules.catalog.repository.*;
-import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.domain.ProductOption;
+import com.gr6.SmartCart.common.domain.ProductOptionValue;
+import com.gr6.SmartCart.common.domain.ProductVariant;
+import com.gr6.SmartCart.common.domain.Shop;
+import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.domain.VariantOptionValue;
+import com.gr6.SmartCart.common.enums.CategoryStatus;
+import com.gr6.SmartCart.common.enums.ProductStatus;
+import com.gr6.SmartCart.common.enums.ShopStatus;
+import com.gr6.SmartCart.common.enums.UserRole;
+import com.gr6.SmartCart.common.enums.UserStatus;
+import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.modules.catalog.dto.VariantCreateRequest;
+import com.gr6.SmartCart.modules.catalog.dto.VariantResponse;
+import com.gr6.SmartCart.modules.catalog.repository.ProductOptionRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductOptionValueRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
+import com.gr6.SmartCart.modules.catalog.repository.VariantOptionValueRepository;
 import com.gr6.SmartCart.modules.catalog.service.ProductVariantService;
+import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class ProductVariantServiceImpl implements ProductVariantService {
-    private final ProductRepository productRepository;
+
     private final ProductVariantRepository variantRepository;
+    private final ProductRepository productRepository;
     private final ProductOptionRepository optionRepository;
     private final ProductOptionValueRepository optionValueRepository;
     private final VariantOptionValueRepository variantOptionValueRepository;
     private final UserRepository userRepository;
 
-    private Shop getCurrentShop() {
+    private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
+        if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
             throw new RuntimeException("Bạn chưa đăng nhập!");
         }
+
         User user = userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
-        if (user.getShop() == null) {
-            throw new RuntimeException("Bạn chưa đăng ký mở Shop!");
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản đang đăng nhập!"));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new RuntimeException("Tài khoản của bạn đã bị khóa!");
         }
-        return user.getShop();
+        if (user.getRole() != UserRole.SELLER) {
+            throw new RuntimeException("Chỉ seller mới được quản lý biến thể sản phẩm!");
+        }
+        if (user.getShop() == null) {
+            throw new RuntimeException("Bạn chưa đăng ký shop!");
+        }
+        if (user.getShop().getStatus() != ShopStatus.ACTIVE) {
+            throw new RuntimeException("Shop chưa hoạt động hoặc đã bị khóa!");
+        }
+        return user;
+    }
+
+    private void validateProductManageableByCurrentSeller(Product product) {
+        User currentUser = getCurrentUser();
+        Shop currentShop = currentUser.getShop();
+
+        if (product.getShop() == null || !product.getShop().getShopId().equals(currentShop.getShopId())) {
+            throw new RuntimeException("Bạn không có quyền thao tác sản phẩm này!");
+        }
+        if (product.getStatus() == ProductStatus.BANNED || product.getStatus() == ProductStatus.DELETED) {
+            throw new RuntimeException("Sản phẩm đã khóa/xóa, không thể thao tác biến thể!");
+        }
+        if (product.getShop().getStatus() != ShopStatus.ACTIVE) {
+            throw new RuntimeException("Shop đang bị khóa hoặc chưa hoạt động!");
+        }
+        if (product.getCategory() == null || product.getCategory().getCategoryStatus() != CategoryStatus.ACTIVE) {
+            throw new RuntimeException("Danh mục sản phẩm đang bị khóa!");
+        }
+    }
+
+    private void validateSkuUniqueForCreate(String sku) {
+        if (variantRepository.existsBySku(sku)) {
+            throw new RuntimeException("Mã SKU này đã tồn tại trong hệ thống!");
+        }
+    }
+
+    private void validateSkuUniqueForUpdate(ProductVariant variant, String newSku) {
+        if (!variant.getSku().equals(newSku) && variantRepository.existsBySku(newSku)) {
+            throw new RuntimeException("Mã SKU này đã có người dùng!");
+        }
+    }
+
+    private void validateAttributeCombination(Product product, VariantCreateRequest request, Long ignoredVariantId) {
+        if (request.getAttributes() == null || request.getAttributes().isEmpty()) {
+            return;
+        }
+
+        Set<String> newOptionValues = new HashSet<>(request.getAttributes().values());
+        boolean existed = product.getVariants().stream()
+                .filter(v -> v.getStatus() != VariantStatus.DELETED)
+                .filter(v -> ignoredVariantId == null || !v.getVariantId().equals(ignoredVariantId))
+                .map(v -> v.getVariantOptionValues().stream()
+                        .map(vov -> vov.getOptionValue().getValue())
+                        .collect(Collectors.toSet()))
+                .anyMatch(vals -> vals.equals(newOptionValues));
+
+        if (existed) {
+            throw new RuntimeException("Biến thể với tổ hợp phân loại này đã tồn tại!");
+        }
     }
 
     @Override
     @Transactional
     public BaseResponse<VariantResponse> createVariant(VariantCreateRequest request) {
-        if (variantRepository.existsBySku(request.getSku())) {
-            return BaseResponse.error(400, "Mã vạch (SKU) này đã tồn tại, vui lòng đổi mã khác!");
-        }
-
         Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm gốc!"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm!"));
 
-        Shop currentShop = getCurrentShop();
-        if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Cảnh báo: Không thể can thiệp vào sản phẩm của cửa hàng khác!");
-        }
+        validateProductManageableByCurrentSeller(product);
+        validateSkuUniqueForCreate(request.getSku());
+        validateAttributeCombination(product, request, null);
 
         ProductVariant variant = new ProductVariant();
         variant.setProduct(product);
@@ -56,34 +133,10 @@ public class ProductVariantServiceImpl implements ProductVariantService {
         variant.setPrice(request.getPrice());
         variant.setStockQuantity(request.getStockQuantity());
         variant.setImageUrl(request.getImageUrl());
+        variant.setStatus(VariantStatus.ACTIVE);
+
         ProductVariant savedVariant = variantRepository.save(variant);
-
-        if (request.getAttributes() != null) {
-            request.getAttributes().forEach((optionName, valueName) -> {
-                ProductOption option = product.getOptions().stream()
-                        .filter(o -> o.getName().equals(optionName))
-                        .findFirst().orElseGet(() -> {
-                            ProductOption newOpt = new ProductOption();
-                            newOpt.setName(optionName);
-                            newOpt.setProduct(product);
-                            return optionRepository.save(newOpt);
-                        });
-
-                ProductOptionValue optValue = option.getValues().stream()
-                        .filter(v -> v.getValue().equals(valueName))
-                        .findFirst().orElseGet(() -> {
-                            ProductOptionValue newVal = new ProductOptionValue();
-                            newVal.setValue(valueName);
-                            newVal.setProductOption(option);
-                            return optionValueRepository.save(newVal);
-                        });
-
-                VariantOptionValue link = new VariantOptionValue();
-                link.setVariant(savedVariant);
-                link.setOptionValue(optValue);
-                variantOptionValueRepository.save(link);
-            });
-        }
+        saveVariantAttributes(product, savedVariant, request);
 
         return BaseResponse.success_data("Tạo biến thể thành công!", VariantResponse.fromEntity(savedVariant));
     }
@@ -93,22 +146,25 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     public BaseResponse<VariantResponse> updateVariant(Long variantId, VariantCreateRequest request) {
         ProductVariant variant = variantRepository.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
-        Shop currentShop = getCurrentShop();
-        if (!variant.getProduct().getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền sửa biến thể này!");
+
+        Product product = variant.getProduct();
+        validateProductManageableByCurrentSeller(product);
+
+        if (variant.getStatus() == VariantStatus.DELETED) {
+            throw new RuntimeException("Biến thể đã bị xóa, không thể cập nhật!");
         }
 
-        if (!variant.getSku().equals(request.getSku()) && variantRepository.existsBySku(request.getSku())) {
-            return BaseResponse.error(400, "Mã SKU này đã có người dùng!");
-        }
+        validateSkuUniqueForUpdate(variant, request.getSku());
+        validateAttributeCombination(product, request, variantId);
 
         variant.setSku(request.getSku());
         variant.setPrice(request.getPrice());
         variant.setStockQuantity(request.getStockQuantity());
         variant.setImageUrl(request.getImageUrl());
+        variant.setStatus(VariantStatus.ACTIVE);
 
-        variantRepository.save(variant);
-        return BaseResponse.success_data("Cập nhật biến thể thành công!", VariantResponse.fromEntity(variant));
+        ProductVariant savedVariant = variantRepository.save(variant);
+        return BaseResponse.success_data("Cập nhật biến thể thành công!", VariantResponse.fromEntity(savedVariant));
     }
 
     @Override
@@ -116,21 +172,55 @@ public class ProductVariantServiceImpl implements ProductVariantService {
     public BaseResponse<String> deleteVariant(Long variantId) {
         ProductVariant variant = variantRepository.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể!"));
-        Shop currentShop = getCurrentShop();
-        if (!variant.getProduct().getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền xóa biến thể này!");
+
+        Product product = variant.getProduct();
+        validateProductManageableByCurrentSeller(product);
+
+        long activeVariants = product.getVariants().stream()
+                .filter(v -> v.getStatus() == VariantStatus.ACTIVE)
+                .count();
+
+        if (activeVariants <= 1) {
+            throw new RuntimeException("Không thể xóa phân loại cuối cùng!");
         }
 
-        // SÁNG THÊM VÀO ĐÂY: Vá lỗi xóa sạch phân loại khiến sản phẩm bị "chết"
-        if (variant.getProduct().getVariants() != null && variant.getProduct().getVariants().size() <= 1) {
-            return BaseResponse.error(400, "Không thể xóa phân loại cuối cùng! Nếu hết hàng, vui lòng cập nhật Tồn kho về 0.");
+        variant.setStatus(VariantStatus.DELETED);
+        variantRepository.save(variant);
+
+        return BaseResponse.successMessage("Xóa biến thể thành công!");
+    }
+
+    private void saveVariantAttributes(Product product, ProductVariant savedVariant, VariantCreateRequest request) {
+        if (request.getAttributes() == null || request.getAttributes().isEmpty()) {
+            return;
         }
 
-        try {
-            variantRepository.deleteById(variantId);
-            return BaseResponse.successMessage("Xóa biến thể thành công!");
-        } catch (Exception e) {
-            return BaseResponse.error(400, "Không thể xóa do biến thể này đã phát sinh giao dịch. Vui lòng cập nhật tồn kho về 0 thay vì xóa!");
-        }
+        request.getAttributes().forEach((optionName, valueName) -> {
+            ProductOption option = product.getOptions().stream()
+                    .filter(o -> o.getName().equals(optionName))
+                    .findFirst()
+                    .orElseGet(() -> {
+                        ProductOption newOption = new ProductOption();
+                        newOption.setName(optionName);
+                        newOption.setProduct(product);
+                        newOption.setValues(new java.util.ArrayList<>()); // Khởi tạo mảng tránh lỗi Null
+                        return optionRepository.save(newOption);
+                    });
+
+            ProductOptionValue optionValue = option.getValues().stream()
+                    .filter(v -> v.getValue().equals(valueName))
+                    .findFirst()
+                    .orElseGet(() -> {
+                        ProductOptionValue newValue = new ProductOptionValue();
+                        newValue.setValue(valueName);
+                        newValue.setProductOption(option);
+                        return optionValueRepository.save(newValue);
+                    });
+
+            VariantOptionValue link = new VariantOptionValue();
+            link.setVariant(savedVariant);
+            link.setOptionValue(optionValue);
+            variantOptionValueRepository.save(link);
+        });
     }
 }
