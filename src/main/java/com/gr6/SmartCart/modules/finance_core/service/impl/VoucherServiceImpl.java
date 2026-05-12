@@ -4,10 +4,11 @@ import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.common.domain.UserVoucherUsage;
 import com.gr6.SmartCart.common.domain.Voucher;
 import com.gr6.SmartCart.common.enums.DiscountType;
+import com.gr6.SmartCart.common.enums.VoucherStatus;
 import com.gr6.SmartCart.modules.finance_core.repository.UserVoucherUsageRepository;
 import com.gr6.SmartCart.modules.finance_core.repository.VoucherRepository;
-import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import com.gr6.SmartCart.modules.finance_core.service.VoucherService;
+import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,7 +70,9 @@ public class VoucherServiceImpl implements VoucherService {
 
     // Hàm phụ trợ gom logic kiểm tra
     private void validateVoucher(Voucher voucher, Long shopId, Long totalAmount) {
-        if (!"ACTIVE".equalsIgnoreCase(voucher.getStatus())) throw new RuntimeException("Voucher không khả dụng");
+        if (!VoucherStatus.ACTIVE.name().equalsIgnoreCase(voucher.getStatus().name())) {
+            throw new RuntimeException("Voucher không khả dụng");
+        }
         LocalDateTime now = LocalDateTime.now();
         if (voucher.getStartDate() != null && now.isBefore(voucher.getStartDate())) throw new RuntimeException("Voucher chưa bắt đầu");
         if (voucher.getEndDate() != null && now.isAfter(voucher.getEndDate())) throw new RuntimeException("Voucher đã hết hạn");

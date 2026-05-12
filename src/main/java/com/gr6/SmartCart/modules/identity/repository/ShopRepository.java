@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface ShopRepository extends JpaRepository<Shop, Long> {
     boolean existsByShopName(String shopName);
     Optional<Shop> findByUser_UserId(Long userId);
+    Optional<Shop> findByUser_Email(String email);
+
 }

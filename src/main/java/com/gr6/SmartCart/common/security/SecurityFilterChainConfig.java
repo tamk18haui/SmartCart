@@ -34,7 +34,8 @@ public class SecurityFilterChainConfig {
                                 "/api/storefront/**",
                                 "/api/v1/fulfillment/product/**",
                                 "/api/v2/auth/**",
-                                "/api/v2/user/profile"
+                                "/api/v2/user/profile",
+                                "/api/v2/seller/vouchers/**"
                         ).permitAll()
 
                         // 2. API xem danh mục dành cho khách vãng lai (từ Sáng)
