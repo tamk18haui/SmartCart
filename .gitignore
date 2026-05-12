@@ -38,4 +38,4 @@ build/
 postman/
 security/
 
-.txt
+*.txt

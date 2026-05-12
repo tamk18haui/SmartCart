@@ -1,27 +1,46 @@
 package com.gr6.SmartCart.common.exception;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-// hàm bắt lỗi dùng chung
+import org.springframework.web.bind.annotation.*;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // Lỗi Validation (vd: @NotBlank, @Min...)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public BaseResponse<String> handleValidation(MethodArgumentNotValidException ex) {
-        String msg = ex.getBindingResult().getFieldError().getDefaultMessage();
+        String msg = "Dữ liệu không hợp lệ";
+
+        if (ex.getBindingResult().getFieldError() != null) {
+            msg = ex.getBindingResult().getFieldError().getDefaultMessage();
+        }
+
         return BaseResponse.error(400, msg);
     }
 
-    // Lỗi nghiệp vụ (Voucher hết hạn, Sai mã...) -> Trả về 400
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public BaseResponse<String> handleConstraintViolation(ConstraintViolationException ex) {
+        return BaseResponse.error(400, ex.getMessage());
+    }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public BaseResponse<String> handleDataIntegrity(DataIntegrityViolationException ex) {
+        return BaseResponse.error(409, "Dữ liệu bị trùng hoặc vi phạm ràng buộc hệ thống!");
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(RuntimeException.class)
     public BaseResponse<String> handleBusinessException(RuntimeException ex) {
         return BaseResponse.error(400, ex.getMessage());
     }
 
-    // Lỗi hệ thống thực sự (Null Pointer, Database sập...) -> Trả về 500
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ExceptionHandler(Exception.class)
     public BaseResponse<String> handleGlobalException(Exception ex) {
         return BaseResponse.error(500, "Lỗi hệ thống nội bộ, vui lòng thử lại sau!");

@@ -23,54 +23,125 @@ public class SecurityFilterChainConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // API public
+
+                        /*
+                         * =========================
+                         * PUBLIC API
+                         * =========================
+                         */
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+
+                                // Auth v1: login/register hiện tại
                                 "/api/v1/auth/**",
+
+                                // Auth v2: forgot-password/reset-password
+                                "/api/v2/auth/**",
+
+                                // Buyer đăng ký shop
                                 "/api/v1/shops/register",
 
-                                // Storefront public đúng version API hiện tại.
-                                // DiscoveryController đang chạy ở /api/v1/storefront/discovery.
+                                // Storefront public: trang chủ/search/filter sản phẩm
                                 "/api/v1/storefront/discovery/**",
 
-                                // Giữ lại path cũ để không làm vỡ frontend nếu trước đó có gọi.
+                                // Giữ path cũ để không vỡ frontend cũ nếu có
                                 "/api/storefront/**",
 
-                                // Chi tiết sản phẩm public.
+                                // Chi tiết sản phẩm public
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
 
-                        // Danh mục: public GET, còn tạo/sửa/ẩn hiện là ADMIN
+                        /*
+                         * =========================
+                         * CATEGORY
+                         * =========================
+                         * GET danh mục public.
+                         * POST/PUT/PATCH danh mục chỉ ADMIN.
+                         */
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/categories").hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/categories/**").hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/categories/**").hasAuthority("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/categories/**").hasAuthority("ADMIN")
 
-                        // Admin
+                        /*
+                         * =========================
+                         * ADMIN
+                         * =========================
+                         * Quản lý buyer/seller/shop/product/admin moderation.
+                         */
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
 
-                        // Seller/Admin inventory
+                        /*
+                         * =========================
+                         * SELLER/ADMIN INVENTORY
+                         * =========================
+                         * Tồn kho là API nhạy cảm, không cho BUYER gọi.
+                         * Service vẫn phải check seller sở hữu variant.
+                         */
                         .requestMatchers("/api/v1/inventory/**").hasAnyAuthority("SELLER", "ADMIN")
 
-                        // Seller product management
+                        /*
+                         * =========================
+                         * SELLER PRODUCT MANAGEMENT
+                         * =========================
+                         */
                         .requestMatchers(HttpMethod.POST, "/api/v1/products").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/products/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/products/**").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/seller/**").hasAuthority("SELLER")
 
-                        // Seller variant management
+                        /*
+                         * =========================
+                         * SELLER VARIANT MANAGEMENT
+                         * =========================
+                         */
                         .requestMatchers(HttpMethod.POST, "/api/v1/variants").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/variants/**").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/variants/**").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/variants/**").hasAuthority("SELLER")
 
-                        // Seller shop/order management
+                        /*
+                         * =========================
+                         * SELLER SHOP MANAGEMENT
+                         * =========================
+                         */
                         .requestMatchers("/api/v1/shops/update").hasAuthority("SELLER")
+
+                        /*
+                         * =========================
+                         * SELLER SHOP ORDER MANAGEMENT
+                         * =========================
+                         * Dùng hasAuthority, không dùng hasRole để tránh lỗi ROLE_SELLER.
+                         */
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop-orders/**").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/confirm").hasAuthority("SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/shop-orders/*/cancel").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/shop-orders/*/confirm").hasAuthority("SELLER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/shop-orders/*/cancel").hasAuthority("SELLER")
 
+                        /*
+                         * =========================
+                         * USER AUTHENTICATED API
+                         * =========================
+                         * Profile, address, cart, checkout, order buyer...
+                         * Không permitAll profile/address/cart.
+                         */
+                        .requestMatchers("/api/v2/user/profile/**").authenticated()
+                        .requestMatchers("/api/v2/customer/addresses/**").authenticated()
+                        .requestMatchers("/api/v1/storefront/cart/**").authenticated()
+                        .requestMatchers("/api/v1/orders/**").authenticated()
+                        .requestMatchers("/api/v1/checkout/**").authenticated()
+
+                        /*
+                         * =========================
+                         * DEFAULT
+                         * =========================
+                         */
                         .anyRequest().authenticated()
                 );
 

@@ -4,6 +4,7 @@ import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Shop;
 import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.common.enums.ShopStatus;
+import com.gr6.SmartCart.modules.identity.dto.ShopInfoResponse;
 import com.gr6.SmartCart.modules.identity.dto.ShopManagerRequest;
 import com.gr6.SmartCart.modules.identity.repository.ShopRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
@@ -65,5 +66,29 @@ public class ShopManagerServiceImpl implements ShopManagerService {
         shopRepository.save(shop);
 
         return BaseResponse.successMessage( "Cập nhật thông tin cửa hàng thành công!");
+    }
+    @Override
+    @Transactional(readOnly = true) // Giữ kết nối mở lâu hơn một chút [cite: 162, 187]
+    public BaseResponse getShopInfo() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Thay vì return user.getShop(), hãy dùng Repository tìm trực tiếp [cite: 132, 186]
+        Shop shop = shopRepository.findByUser_UserId(user.getUserId())
+                .orElseThrow(() -> new RuntimeException("Shop not found"));
+
+        // Chuyển từ Entity sang DTO để trả về [cite: 199]
+        ShopInfoResponse response = ShopInfoResponse.builder()
+                .shopId(shop.getShopId())
+                .shopName(shop.getShopName())
+                .pickupAddress(shop.getPickupAddress())
+                .description(shop.getDescription())
+                .status(shop.getStatus().name())
+                .build();
+
+        return BaseResponse.success(response);
     }
 }

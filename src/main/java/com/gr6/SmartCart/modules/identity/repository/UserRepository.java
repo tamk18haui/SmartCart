@@ -14,16 +14,23 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
 
-    // SÁNG THÊM: Lọc User cho Admin (theo Role, Status, Keyword)
-    @Query("SELECT u FROM User u WHERE " +
-            "(:role IS NULL OR u.role = :role) AND " +
-            "(:status IS NULL OR u.status = :status) AND " +
-            "(:keyword IS NULL OR :keyword = '' " +
+    @Query("SELECT u FROM User u " +
+            "WHERE (:role IS NULL OR u.role = :role) " +
+            "AND (:status IS NULL OR u.status = :status) " +
+            "AND (:keyword IS NULL OR :keyword = '' " +
             "OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))")
-    Page<User> searchForAdmin(@Param("role") UserRole role, @Param("status") UserStatus status, @Param("keyword") String keyword, Pageable pageable);
+            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "OR LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY u.userId DESC")
+    Page<User> searchForAdmin(
+            @Param("role") UserRole role,
+            @Param("status") UserStatus status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 }
