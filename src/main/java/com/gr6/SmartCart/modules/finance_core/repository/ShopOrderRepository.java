@@ -18,4 +18,5 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     List<ShopOrder> findByOrder_OrderId(Long orderId);
 
     List<ShopOrder> findByOrder_OrderIdAndStatus(Long orderId, OrderStatus status);
+    List<ShopOrder> findByOrder_User_EmailOrderByShopOrderIdDesc(String email);
 }
