@@ -3,63 +3,57 @@ package com.gr6.SmartCart.modules.finance_core.dto;
 import com.gr6.SmartCart.common.enums.CheckoutSource;
 import com.gr6.SmartCart.common.enums.PaymentMethod;
 import com.gr6.SmartCart.common.enums.PaymentProvider;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 
 import java.util.List;
 
-@Data
 public class CreateOrderRequest {
-
-    @NotNull(message = "Vui lòng chọn địa chỉ giao hàng")
     private Long addressId;
-
-    @NotNull(message = "Vui lòng chọn phương thức thanh toán")
     private PaymentMethod paymentMethod;
-
-    /**
-     * COD: có thể để NONE hoặc null.
-     * ONLINE: bắt buộc MOMO hoặc VNPAY.
-     */
     private PaymentProvider paymentProvider;
-
-    @NotNull(message = "Vui lòng chọn nguồn mua hàng")
     private CheckoutSource checkoutSource;
-
-    /**
-     * Để sẵn cho chống double-click tạo trùng đơn.
-     * Bản này chưa enforce unique DB.
-     */
-    private String checkoutToken;
-
-    @Valid
-    @NotEmpty(message = "Danh sách đơn hàng không được để trống")
     private List<ShopOrderRequest> shopOrders;
 
-    @Data
+    // --- GETTERS & SETTERS BỌC THÉP ---
+    public Long getAddressId() { return addressId; }
+    public void setAddressId(Long addressId) { this.addressId = addressId; }
+
+    public PaymentMethod getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
+
+    public PaymentProvider getPaymentProvider() { return paymentProvider; }
+    public void setPaymentProvider(PaymentProvider paymentProvider) { this.paymentProvider = paymentProvider; }
+
+    public CheckoutSource getCheckoutSource() { return checkoutSource; }
+    public void setCheckoutSource(CheckoutSource checkoutSource) { this.checkoutSource = checkoutSource; }
+
+    public List<ShopOrderRequest> getShopOrders() { return shopOrders; }
+    public void setShopOrders(List<ShopOrderRequest> shopOrders) { this.shopOrders = shopOrders; }
+
+    // --- INNER CLASS: ShopOrderRequest ---
     public static class ShopOrderRequest {
-
-        @NotNull(message = "Thiếu thông tin shop")
         private Long shopId;
-
         private String voucherCode;
-
-        @Valid
-        @NotEmpty(message = "Shop này chưa có sản phẩm nào")
         private List<ItemRequest> items;
+
+        public Long getShopId() { return shopId; }
+        public void setShopId(Long shopId) { this.shopId = shopId; }
+
+        public String getVoucherCode() { return voucherCode; }
+        public void setVoucherCode(String voucherCode) { this.voucherCode = voucherCode; }
+
+        public List<ItemRequest> getItems() { return items; }
+        public void setItems(List<ItemRequest> items) { this.items = items; }
     }
 
-    @Data
+    // --- INNER CLASS: ItemRequest ---
     public static class ItemRequest {
-
-        @NotNull(message = "Thiếu thông tin biến thể sản phẩm")
         private Long variantId;
-
-        @NotNull(message = "Thiếu số lượng")
-        @Min(value = 1, message = "Số lượng phải lớn hơn 0")
         private Integer quantity;
+
+        public Long getVariantId() { return variantId; }
+        public void setVariantId(Long variantId) { this.variantId = variantId; }
+
+        public Integer getQuantity() { return quantity; }
+        public void setQuantity(Integer quantity) { this.quantity = quantity; }
     }
 }

@@ -4,67 +4,86 @@ import com.gr6.SmartCart.common.enums.ProductCondition;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
+@Data
 @Entity
 @Table(name = "Products")
-@Getter
-@Setter
 public class Product {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long productId;
+
+    @ManyToOne
+    @JoinColumn(name = "shop_id", nullable = false)
+    private Shop shop;
+
+    @ManyToOne
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
 
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(columnDefinition = "LONGTEXT")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(length = 100)
     private String brand;
 
-    @Enumerated(EnumType.STRING) @Column(name = "product_condition", length = 50)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_condition", nullable = false, length = 50)
     private ProductCondition condition;
 
-    @Column(precision = 18, scale = 2)
+    @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal basePrice;
-
-    @Column(columnDefinition = "TEXT")
-    private String imageUrls;
-
-    @Column(columnDefinition = "int default 0")
-    private Integer soldCount = 0;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal weight;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(precision = 10, scale = 2)
     private BigDecimal length;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(precision = 10, scale = 2)
     private BigDecimal width;
 
-    @Column(nullable = false, precision = 10, scale = 2)
+    @Column(precision = 10, scale = 2)
     private BigDecimal height;
 
-    private Boolean isPreOrder;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private ProductStatus status = ProductStatus.ACTIVE;
 
-    @Enumerated(EnumType.STRING) @Column(length = 50)
-    private ProductStatus status;
+    @Column(columnDefinition = "TEXT")
+    private String imageUrls;
 
-    @ManyToOne @JoinColumn(name = "shop_id", nullable = false)
-    private Shop shop;
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
 
-    @ManyToOne @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
+    private LocalDateTime updatedAt = LocalDateTime.now();
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
-    private List<ProductOption> options;
+    // LƯU LỊCH SỬ ADMIN KHÓA
+    @Column(columnDefinition = "TEXT")
+    private String banReason;
+
+    private LocalDateTime bannedAt;
+
+    private String bannedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private ProductStatus previousStatus;
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
     private List<ProductVariant> variants;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    private List<ProductOption> options;
 }

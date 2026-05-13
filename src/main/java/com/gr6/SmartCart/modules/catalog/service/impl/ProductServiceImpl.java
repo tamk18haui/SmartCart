@@ -2,56 +2,80 @@ package com.gr6.SmartCart.modules.catalog.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.base.PageResponse;
-import com.gr6.SmartCart.common.domain.*;
-import com.gr6.SmartCart.common.enums.OrderStatus;
+import com.gr6.SmartCart.common.domain.Category;
+import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.domain.ProductVariant;
+import com.gr6.SmartCart.common.domain.Shop;
+import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.enums.CategoryStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
-import com.gr6.SmartCart.modules.catalog.dto.*;
-import com.gr6.SmartCart.modules.catalog.repository.*;
-import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.common.enums.ShopStatus;
+import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.modules.catalog.dto.ProductRequest;
+import com.gr6.SmartCart.modules.catalog.dto.ProductResponse;
+import com.gr6.SmartCart.modules.catalog.repository.CategoryRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
 import com.gr6.SmartCart.modules.catalog.service.ProductService;
+import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
+
     private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
-    private final CatalogReviewRepository catalogReviewRepository;
-    private final CatalogOrderItemRepository catalogOrderItemRepository;
-    private final ProductVariantRepository variantRepository;
 
-    private Shop getCurrentShop() {
+    private Shop getCurrentActiveShop() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
         if (auth == null || !auth.isAuthenticated()) {
             throw new RuntimeException("Bạn chưa đăng nhập!");
         }
+
         User user = userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new RuntimeException("Lỗi xác thực: Không tìm thấy người dùng!"));
-        if (user.getShop() == null) {
-            throw new RuntimeException("Bạn chưa đăng ký mở Shop!");
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
+
+        Shop shop = user.getShop();
+
+        if (shop == null) {
+            throw new RuntimeException("Tài khoản hiện tại chưa đăng ký shop!");
         }
-        return user.getShop();
+
+        if (shop.getStatus() != ShopStatus.ACTIVE) {
+            throw new RuntimeException("Shop chưa được duyệt hoặc đã bị khóa!");
+        }
+
+        return shop;
     }
 
     @Override
     @Transactional
     public BaseResponse<ProductResponse> createProduct(ProductRequest request) {
+        Shop shop = getCurrentActiveShop();
+
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
-        Shop currentShop = getCurrentShop();
+
+        if (category.getCategoryStatus() != CategoryStatus.ACTIVE) {
+            throw new RuntimeException("Danh mục này đang bị ẩn, không thể đăng sản phẩm!");
+        }
 
         Product product = new Product();
-        product.setName(request.getName());
+        product.setShop(shop);
+        product.setCategory(category);
+        product.setName(request.getName().trim());
         product.setDescription(request.getDescription());
         product.setBrand(request.getBrand());
         product.setCondition(request.getCondition());
@@ -61,75 +85,71 @@ public class ProductServiceImpl implements ProductService {
         product.setWidth(request.getWidth());
         product.setHeight(request.getHeight());
         product.setStatus(ProductStatus.ACTIVE);
-        product.setCategory(category);
-        product.setShop(currentShop);
 
-        // SÁNG THÊM VÀO ĐÂY: Lưu nhiều ảnh lúc đăng mới
         if (request.getUploadImages() != null && !request.getUploadImages().isEmpty()) {
-            String joinedImages = String.join(",", request.getUploadImages());
-            product.setImageUrls(joinedImages);
+            product.setImageUrls(
+                    request.getUploadImages()
+                            .stream()
+                            .filter(url -> url != null && !url.isBlank())
+                            .map(String::trim)
+                            .collect(Collectors.joining(","))
+            );
         }
 
         Product savedProduct = productRepository.save(product);
 
         ProductVariant defaultVariant = new ProductVariant();
         defaultVariant.setProduct(savedProduct);
-        defaultVariant.setSku("SP" + savedProduct.getProductId() + "-DEFAULT");
+        defaultVariant.setSku("P-" + savedProduct.getProductId() + "-DEFAULT");
         defaultVariant.setPrice(savedProduct.getBasePrice());
         defaultVariant.setStockQuantity(request.getStockQuantity());
-        ProductVariant savedVariant = variantRepository.save(defaultVariant);
+        defaultVariant.setImageUrl(firstImage(savedProduct.getImageUrls()));
+        defaultVariant.setIsDefault(true);
+        defaultVariant.setStatus(VariantStatus.ACTIVE);
 
-        savedProduct.setVariants(new ArrayList<>());
-        savedProduct.getVariants().add(savedVariant);
+        variantRepository.save(defaultVariant);
 
-        return BaseResponse.success_data("Đã đăng sản phẩm thành công!", ProductResponse.fromEntity(savedProduct));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public BaseResponse<PageResponse<ProductResponse>> getProductsByShop(Long shopId, int page, int size) {
-        Pageable pageable = PageRequest.of(page - 1, size);
-        Page<Product> productPage = productRepository.findByShopShopIdAndStatusNot(
-                shopId, ProductStatus.DELETED, pageable
+        return BaseResponse.success_data(
+                "Tạo sản phẩm thành công",
+                ProductResponse.fromEntity(savedProduct)
         );
-        Page<ProductResponse> responsePage = productPage.map(product -> {
-            ProductResponse res = ProductResponse.fromEntity(product);
-            Double avgRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
-            res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
-            res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(product.getProductId(), OrderStatus.DELIVERED));
-            return res;
-        });
-        return BaseResponse.success_data("Lấy danh sách sản phẩm thành công", PageResponse.of(responsePage));
     }
 
     @Override
-    @Transactional
-    public BaseResponse<String> deleteProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm để xóa"));
-        Shop currentShop = getCurrentShop();
-        if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền xóa sản phẩm của người khác!");
-        }
-        product.setStatus(ProductStatus.DELETED);
-        productRepository.save(product);
-        return BaseResponse.successMessage("Đã xóa sản phẩm thành công!");
+    public BaseResponse<PageResponse<ProductResponse>> getProductsByShop(Long shopId, int page, int size) {
+        Page<Product> products = productRepository.findByShopShopIdAndStatusNot(
+                shopId,
+                ProductStatus.DELETED,
+                PageRequest.of(Math.max(page - 1, 0), size)
+        );
+
+        Page<ProductResponse> responsePage = products.map(ProductResponse::fromEntity);
+
+        return BaseResponse.success(PageResponse.of(responsePage));
     }
 
     @Override
     @Transactional
     public BaseResponse<ProductResponse> updateProduct(Long productId, ProductRequest request) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm!"));
-        Shop currentShop = getCurrentShop();
-        if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Cảnh báo: Bạn không có quyền sửa sản phẩm của người khác!");
+        Shop shop = getCurrentActiveShop();
+
+        Product product = productRepository
+                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền sửa!"));
+
+        if (product.getStatus() == ProductStatus.BANNED) {
+            throw new RuntimeException("Sản phẩm đang bị admin khóa, seller không thể tự sửa!");
         }
 
         Category category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục mới!"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục!"));
 
-        product.setName(request.getName());
+        if (category.getCategoryStatus() != CategoryStatus.ACTIVE) {
+            throw new RuntimeException("Danh mục này đang bị ẩn!");
+        }
+
+        product.setCategory(category);
+        product.setName(request.getName().trim());
         product.setDescription(request.getDescription());
         product.setBrand(request.getBrand());
         product.setCondition(request.getCondition());
@@ -138,47 +158,66 @@ public class ProductServiceImpl implements ProductService {
         product.setLength(request.getLength());
         product.setWidth(request.getWidth());
         product.setHeight(request.getHeight());
-        product.setCategory(category);
 
-        // SÁNG THÊM VÀO ĐÂY: Lưu nhiều ảnh lúc cập nhật
-        if (request.getUploadImages() != null && !request.getUploadImages().isEmpty()) {
-            String joinedImages = String.join(",", request.getUploadImages());
-            product.setImageUrls(joinedImages);
+        if (request.getUploadImages() != null) {
+            product.setImageUrls(
+                    request.getUploadImages()
+                            .stream()
+                            .filter(url -> url != null && !url.isBlank())
+                            .map(String::trim)
+                            .collect(Collectors.joining(","))
+            );
         }
 
-        Product updatedProduct = productRepository.save(product);
+        Product savedProduct = productRepository.save(product);
 
-        // SÁNG THÊM VÀO ĐÂY: Vá lỗi đồng bộ giá cho phân loại mặc định
-        if (updatedProduct.getVariants() != null) {
-            updatedProduct.getVariants().stream()
-                    .filter(v -> v.getSku().endsWith("-DEFAULT"))
-                    .findFirst()
-                    .ifPresent(v -> {
-                        v.setPrice(request.getBasePrice());
-                        variantRepository.save(v);
-                    });
-        }
-
-        return BaseResponse.success_data("Cập nhật sản phẩm thành công!", ProductResponse.fromEntity(updatedProduct));
+        return BaseResponse.success_data(
+                "Cập nhật sản phẩm thành công",
+                ProductResponse.fromEntity(savedProduct)
+        );
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public BaseResponse<ProductResponse> getProductForSeller(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm!"));
-        Shop currentShop = getCurrentShop();
-        if (!product.getShop().getShopId().equals(currentShop.getShopId())) {
-            return BaseResponse.error(403, "Bạn không có quyền truy cập sản phẩm này!");
-        }
-        if (product.getStatus() == ProductStatus.DELETED) {
-            return BaseResponse.error(404, "Sản phẩm này đã bị xóa!");
+    @Transactional
+    public BaseResponse<String> deleteProduct(Long productId) {
+        Shop shop = getCurrentActiveShop();
+
+        Product product = productRepository
+                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền xóa!"));
+
+        if (product.getStatus() == ProductStatus.BANNED) {
+            throw new RuntimeException("Sản phẩm đang bị admin khóa, seller không thể tự xóa!");
         }
 
-        ProductResponse res = ProductResponse.fromEntity(product);
-        Double avgRating = catalogReviewRepository.getAverageRatingByProductId(productId);
-        res.setAverageRating(Math.round(avgRating * 10.0) / 10.0);
-        res.setSoldQuantity(catalogOrderItemRepository.getSoldQuantityByProductId(productId, OrderStatus.DELIVERED));
-        return BaseResponse.success_data("Lấy chi tiết thành công", res);
+        product.setStatus(ProductStatus.DELETED);
+
+        if (product.getVariants() != null) {
+            product.getVariants().forEach(variant -> variant.setStatus(VariantStatus.DELETED));
+        }
+
+        productRepository.save(product);
+
+        return BaseResponse.successMessage("Xóa sản phẩm thành công");
+    }
+
+    @Override
+    public BaseResponse<ProductResponse> getProductForSeller(Long productId) {
+        Shop shop = getCurrentActiveShop();
+
+        Product product = productRepository
+                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền xem!"));
+
+        return BaseResponse.success(ProductResponse.fromEntity(product));
+    }
+
+    private String firstImage(String imageUrls) {
+        if (imageUrls == null || imageUrls.isBlank()) {
+            return null;
+        }
+
+        String[] parts = imageUrls.split(",");
+        return parts.length == 0 ? null : parts[0].trim();
     }
 }

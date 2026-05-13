@@ -6,4 +6,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VariantOptionValueRepository extends JpaRepository<VariantOptionValue, Long> {
+
+    void deleteByVariantVariantId(Long variantId);
 }
