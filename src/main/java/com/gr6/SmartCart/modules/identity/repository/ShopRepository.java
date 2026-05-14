@@ -37,4 +37,6 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+    Optional<Shop> findByUser_Email(String email);
+
 }

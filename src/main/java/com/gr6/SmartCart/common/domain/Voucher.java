@@ -1,8 +1,8 @@
 package com.gr6.SmartCart.common.domain;
 
 import com.gr6.SmartCart.common.enums.DiscountType;
+import com.gr6.SmartCart.common.enums.VoucherStatus;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -32,6 +32,6 @@ public class Voucher {
     private LocalDateTime startDate;
     private LocalDateTime endDate;
 
-    @Column(length = 50)
-    private String status;
+    @Enumerated(EnumType.STRING) @Column(length = 50)
+    private VoucherStatus status;
 }
