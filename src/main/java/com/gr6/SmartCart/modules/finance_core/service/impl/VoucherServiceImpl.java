@@ -4,6 +4,7 @@ import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.common.domain.UserVoucherUsage;
 import com.gr6.SmartCart.common.domain.Voucher;
 import com.gr6.SmartCart.common.enums.DiscountType;
+import com.gr6.SmartCart.common.enums.VoucherStatus;
 import com.gr6.SmartCart.modules.finance_core.repository.UserVoucherUsageRepository;
 import com.gr6.SmartCart.modules.finance_core.repository.VoucherRepository;
 import com.gr6.SmartCart.modules.finance_core.service.VoucherService;
@@ -18,132 +19,71 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class VoucherServiceImpl implements VoucherService {
 
-    private static final String ACTIVE_STATUS = "ACTIVE";
-
     private final VoucherRepository voucherRepository;
-    private final UserVoucherUsageRepository userVoucherUsageRepository;
+    private final UserVoucherUsageRepository usageRepository;
     private final UserRepository userRepository;
 
     @Override
-    @Transactional(readOnly = true)
     public Long calculateDiscount(String code, Long totalAmount, Long shopId, Long userId) {
-        if (isBlank(code)) {
-            return 0L;
-        }
+        if (code == null || code.isBlank()) return 0L;
 
-        if (totalAmount == null || totalAmount <= 0) {
-            return 0L;
-        }
+        // Dùng hàm KHÔNG LOCK để tránh kẹt hệ thống
+        Voucher voucher = voucherRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
 
-        Voucher voucher = voucherRepository.findByCode(code.trim())
-                .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại!"));
+        validateVoucher(voucher, shopId, totalAmount);
 
-        validateVoucher(voucher, totalAmount, shopId, userId);
+        // KIỂM TRA LƯỢT DÙNG CỦA CÁ NHÂN (Mỗi người 1 lần)
+        usageRepository.findByUser_UserIdAndVoucher_VoucherId(userId, voucher.getVoucherId())
+                .ifPresent(u -> {
+                    if (u.getUsedCount() >= 1) throw new RuntimeException("Bạn đã sử dụng mã giảm giá này rồi!");
+                });
 
-        return calculateAmount(voucher, totalAmount);
+        return calculate(voucher, totalAmount);
     }
 
     @Override
     @Transactional
     public void useVoucher(String code, Long userId) {
-        if (isBlank(code)) {
-            return;
-        }
+        if (code == null || code.isBlank()) return;
 
-        Voucher voucher = voucherRepository.findByCodeWithLock(code.trim())
-                .orElseThrow(() -> new RuntimeException("Mã giảm giá không tồn tại!"));
+        // Dùng hàm CÓ LOCK để trừ lượt an toàn
+        Voucher voucher = voucherRepository.findByCodeWithLock(code)
+                .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
 
-        validateVoucher(voucher, null, null, userId);
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
-
-        UserVoucherUsage usage = userVoucherUsageRepository
-                .findByUser_UserIdAndVoucher_VoucherId(userId, voucher.getVoucherId())
-                .orElseGet(() -> {
-                    UserVoucherUsage newUsage = new UserVoucherUsage();
-                    newUsage.setUser(user);
-                    newUsage.setVoucher(voucher);
-                    newUsage.setUsedCount(0);
-                    return newUsage;
-                });
-
-        if (usage.getUsedCount() != null && usage.getUsedCount() >= 1) {
-            throw new RuntimeException("Bạn đã sử dụng mã giảm giá này rồi!");
-        }
-
-        voucher.setUsedCount(safeInt(voucher.getUsedCount()) + 1);
-        usage.setUsedCount(safeInt(usage.getUsedCount()) + 1);
-
+        // Trừ lượt chung
+        voucher.setUsedCount(voucher.getUsedCount() + 1);
         voucherRepository.save(voucher);
-        userVoucherUsageRepository.save(usage);
+
+        // Ghi nhận lượt dùng của User
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+
+        UserVoucherUsage usage = usageRepository.findByUser_UserIdAndVoucher_VoucherId(userId, voucher.getVoucherId())
+                .orElse(new UserVoucherUsage());
+
+        usage.setUser(user);
+        usage.setVoucher(voucher);
+        usage.setUsedCount(usage.getUsedCount() != null ? usage.getUsedCount() + 1 : 1);
+        usageRepository.save(usage);
     }
 
-    private void validateVoucher(Voucher voucher, Long totalAmount, Long shopId, Long userId) {
+    // Hàm phụ trợ gom logic kiểm tra
+    private void validateVoucher(Voucher voucher, Long shopId, Long totalAmount) {
+        if (!VoucherStatus.ACTIVE.name().equalsIgnoreCase(voucher.getStatus().name())) {
+            throw new RuntimeException("Voucher không khả dụng");
+        }
         LocalDateTime now = LocalDateTime.now();
-
-        if (!ACTIVE_STATUS.equalsIgnoreCase(voucher.getStatus())) {
-            throw new RuntimeException("Mã giảm giá không còn hoạt động!");
-        }
-
-        if (voucher.getStartDate() != null && now.isBefore(voucher.getStartDate())) {
-            throw new RuntimeException("Mã giảm giá chưa đến thời gian sử dụng!");
-        }
-
-        if (voucher.getEndDate() != null && now.isAfter(voucher.getEndDate())) {
-            throw new RuntimeException("Mã giảm giá đã hết hạn!");
-        }
-
-        if (voucher.getUsageLimit() != null
-                && voucher.getUsageLimit() > 0
-                && safeInt(voucher.getUsedCount()) >= voucher.getUsageLimit()) {
-            throw new RuntimeException("Mã giảm giá đã hết lượt sử dụng!");
-        }
-
-        if (shopId != null
-                && voucher.getShop() != null
-                && !voucher.getShop().getShopId().equals(shopId)) {
-            throw new RuntimeException("Mã giảm giá không thuộc shop này!");
-        }
-
-        if (totalAmount != null
-                && voucher.getMinOrderValue() != null
-                && totalAmount < voucher.getMinOrderValue()) {
-            throw new RuntimeException("Đơn hàng chưa đạt giá trị tối thiểu để dùng mã!");
-        }
-
-        if (userId != null) {
-            userVoucherUsageRepository
-                    .findByUser_UserIdAndVoucher_VoucherId(userId, voucher.getVoucherId())
-                    .ifPresent(usage -> {
-                        if (safeInt(usage.getUsedCount()) >= 1) {
-                            throw new RuntimeException("Bạn đã sử dụng mã giảm giá này rồi!");
-                        }
-                    });
-        }
+        if (voucher.getStartDate() != null && now.isBefore(voucher.getStartDate())) throw new RuntimeException("Voucher chưa bắt đầu");
+        if (voucher.getEndDate() != null && now.isAfter(voucher.getEndDate())) throw new RuntimeException("Voucher đã hết hạn");
+        if (!voucher.getShop().getShopId().equals(shopId)) throw new RuntimeException("Voucher không thuộc shop này");
+        if (voucher.getMinOrderValue() != null && totalAmount < voucher.getMinOrderValue()) throw new RuntimeException("Chưa đủ giá trị đơn");
+        if (voucher.getUsageLimit() != null && voucher.getUsedCount() >= voucher.getUsageLimit()) throw new RuntimeException("Voucher đã hết lượt trên toàn hệ thống");
     }
 
-    private Long calculateAmount(Voucher voucher, Long totalAmount) {
-        long discount;
-
-        if (voucher.getDiscountType() == DiscountType.PERCENT) {
-            discount = totalAmount * voucher.getDiscountValue() / 100;
-        } else {
-            discount = voucher.getDiscountValue();
-        }
-
-        if (voucher.getMaxDiscountAmount() != null && voucher.getMaxDiscountAmount() > 0) {
-            discount = Math.min(discount, voucher.getMaxDiscountAmount());
-        }
-
-        return Math.max(0L, Math.min(discount, totalAmount));
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
-
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
+    private long calculate(Voucher v, Long total) {
+        long discount = (v.getDiscountType() == DiscountType.FIXED) ? v.getDiscountValue() : (total * v.getDiscountValue()) / 100;
+        if (v.getMaxDiscountAmount() != null) discount = Math.min(discount, v.getMaxDiscountAmount());
+        return Math.min(discount, total);
     }
 }
