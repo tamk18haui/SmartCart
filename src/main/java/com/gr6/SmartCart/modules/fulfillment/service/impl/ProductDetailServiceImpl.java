@@ -75,7 +75,10 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .brand(product.getBrand())
                 .basePrice(product.getBasePrice())
                 .imageUrls(splitImageUrls(product.getImageUrls()))
+
+                .shopId(product.getShop() != null ? product.getShop().getShopId() : null)
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
+
                 .totalStock(totalStock)
                 .status(product.getStatus() != null ? product.getStatus().name() : null)
                 .optionGroups(optionGroups)

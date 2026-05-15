@@ -50,9 +50,7 @@ public class SecurityFilterChainConfig {
                                 "/api/storefront/**",
 
                                 // Chi tiết sản phẩm public
-                                "/api/v1/fulfillment/product/**",
-                                "/api/v2/user/profile",
-                                "/api/v2/seller/vouchers/**"
+                                "/api/v1/fulfillment/product/**"
                         ).permitAll()
 
                         /*
