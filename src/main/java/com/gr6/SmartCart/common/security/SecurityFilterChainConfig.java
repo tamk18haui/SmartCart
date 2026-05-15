@@ -52,6 +52,7 @@ public class SecurityFilterChainConfig {
                                 // Chi tiết sản phẩm public
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vouchers/shop/**").permitAll()
 
                         /*
                          * =========================

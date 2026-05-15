@@ -19,6 +19,8 @@ public class Address {
     @Column(nullable = false, length = 15)
     private String receiverPhone;
 
+    
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String fullAddress;
 
