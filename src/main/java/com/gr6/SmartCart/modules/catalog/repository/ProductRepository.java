@@ -71,4 +71,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("categoryStatus") CategoryStatus categoryStatus,
             Pageable pageable
     );
+    Long countByShop_ShopIdAndStatus(Long shopId, ProductStatus status);
+
+    Page<Product> findByShop_ShopIdAndStatusOrderByProductIdDesc(
+            Long shopId,
+            ProductStatus status,
+            Pageable pageable
+    );
 }

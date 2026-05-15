@@ -17,6 +17,7 @@ public class ProductDetailResponse {
     private String brand;
     private BigDecimal basePrice;
     private List<String> imageUrls;
+    private Long shopId;
     private String shopName;
     private Integer totalStock;
     private String status;
