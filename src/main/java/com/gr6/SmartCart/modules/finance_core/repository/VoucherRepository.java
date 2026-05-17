@@ -11,14 +11,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface VoucherRepository extends JpaRepository<Voucher, Long> {
-    // Hàm 1: Đọc thông thường (Dùng cho API Preview - Chống Deadlock)
-    Optional<Voucher> findByCode(String code);
-
     // Hàm 2: Đọc và Khóa (Dùng cho API Checkout - Chống Race Condition)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Voucher v WHERE v.code = :code")
 
-    Optional<Voucher> findByCodeWithLock(@Param("code") String code);
     // Lấy danh sách Voucher của 1 Shop
     List<Voucher> findByShop_ShopId(Long shopId);
 
@@ -28,4 +24,37 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
 
     // Kiểm tra xem mã Code đã tồn tại trong Shop chưa (dùng khi tạo mới)
     boolean existsByShop_ShopIdAndCode(Long shopId, String code);
+
+    @Query("""
+            SELECT v
+            FROM Voucher v
+            LEFT JOIN FETCH v.shop s
+            WHERE UPPER(v.code) = UPPER(:code)
+            """)
+    Optional<Voucher> findByCode(@Param("code") String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT v
+            FROM Voucher v
+            LEFT JOIN FETCH v.shop s
+            WHERE UPPER(v.code) = UPPER(:code)
+            """)
+    Optional<Voucher> findByCodeWithLock(@Param("code") String code);
+
+    @Query("""
+            SELECT v
+            FROM Voucher v
+            LEFT JOIN FETCH v.shop s
+            WHERE s.shopId = :shopId
+            ORDER BY 
+                CASE 
+                    WHEN v.discountType = com.gr6.SmartCart.common.enums.DiscountType.PERCENT THEN 1
+                    ELSE 2
+                END,
+                v.discountValue DESC
+            """)
+    List<Voucher> findBuyerVouchersByShopId(@Param("shopId") Long shopId);
+
+    boolean existsByCodeIgnoreCase(String code);
 }
