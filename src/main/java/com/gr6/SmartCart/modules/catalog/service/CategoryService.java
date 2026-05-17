@@ -12,4 +12,5 @@ public interface CategoryService {
     // SÁNG THÊM VÀO ĐÂY:
     BaseResponse<CategoryResponse> updateCategory(Long id, CategoryRequest request);
     BaseResponse<String> toggleCategoryStatus(Long id);
+    BaseResponse<List<CategoryResponse>> getAllCategoriesForAdmin();
 }

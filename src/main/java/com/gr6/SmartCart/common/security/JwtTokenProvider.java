@@ -19,7 +19,7 @@ public class JwtTokenProvider {
     @Value("${JWT_EXPIRATION}")
     private long jwtExpirationInMs;
 
-    // 1. Hàm tạo Token (Hưởng sẽ gọi hàm này trong LoginService) [cite: 1740]
+    // 1. Hàm tạo Token
     public String generateToken(String email) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
