@@ -20,7 +20,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    // Hưởng chú ý: Gọi đúng class JwtTokenProvider bạn vừa gửi
+    //Gọi đúng class JwtTokenProvider bạn vừa gửi
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsService userDetailsService;
 
