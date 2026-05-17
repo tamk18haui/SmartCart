@@ -1,76 +1,55 @@
 package com.gr6.SmartCart.modules.finance_core.controller;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.Voucher;
-import com.gr6.SmartCart.common.enums.VoucherStatus;
+import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.modules.finance_core.dto.ShopVoucherResponse;
-import com.gr6.SmartCart.modules.finance_core.repository.VoucherRepository;
+import com.gr6.SmartCart.modules.finance_core.service.VoucherService;
+import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/vouchers")
 @RequiredArgsConstructor
 public class BuyerVoucherController {
 
-    private final VoucherRepository voucherRepository;
+    private final VoucherService voucherService;
+    private final UserRepository userRepository;
 
     @GetMapping("/shop/{shopId}")
     public BaseResponse<List<ShopVoucherResponse>> getVouchersByShop(
-            @PathVariable Long shopId
+            @PathVariable Long shopId,
+            @RequestParam(required = false) Long orderValue,
+            Authentication authentication
     ) {
-        if (shopId == null || shopId <= 0) {
-            return BaseResponse.error(400, "Shop không hợp lệ");
-        }
+        Long userId = getCurrentUserId(authentication);
 
-        LocalDateTime now = LocalDateTime.now();
-
-        List<ShopVoucherResponse> vouchers = voucherRepository.findByShop_ShopId(shopId)
-                .stream()
-                .filter(this::isVoucherActive)
-                .filter(voucher -> isVoucherInTime(voucher, now))
-                .filter(this::isVoucherStillUsable)
-                .map(ShopVoucherResponse::fromEntity)
-                .collect(Collectors.toList());
+        List<ShopVoucherResponse> vouchers = voucherService.getShopVouchers(
+                shopId,
+                userId,
+                orderValue
+        );
 
         return BaseResponse.success_data(
-                "Lấy danh sách voucher của shop thành công",
+                "Lấy voucher của shop thành công",
                 vouchers
         );
     }
 
-    private boolean isVoucherActive(Voucher voucher) {
-        return voucher != null && voucher.getStatus() == VoucherStatus.ACTIVE;
-    }
-
-    private boolean isVoucherInTime(Voucher voucher, LocalDateTime now) {
-        if (voucher.getStartDate() != null && voucher.getStartDate().isAfter(now)) {
-            return false;
+    private Long getCurrentUserId(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return null;
         }
 
-        if (voucher.getEndDate() != null && voucher.getEndDate().isBefore(now)) {
-            return false;
-        }
+        String email = authentication.getName();
 
-        return true;
-    }
-
-    private boolean isVoucherStillUsable(Voucher voucher) {
-        Integer usageLimit = voucher.getUsageLimit();
-        Integer usedCount = voucher.getUsedCount();
-
-        if (usageLimit == null || usageLimit <= 0) {
-            return true;
-        }
-
-        if (usedCount == null) {
-            return true;
-        }
-
-        return usedCount < usageLimit;
+        return userRepository.findByEmail(email)
+                .map(User::getUserId)
+                .orElse(null);
     }
 }

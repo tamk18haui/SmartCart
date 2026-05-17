@@ -20,6 +20,8 @@ public class OrderTrackingResponse {
     private String receiverName;
     private String shippingAddress;
     private LocalDateTime createdAt;
+    private Boolean canCancel;
+
     private List<TrackingItemDto> items;
 
     @Data

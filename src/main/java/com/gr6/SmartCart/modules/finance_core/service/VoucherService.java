@@ -1,8 +1,26 @@
-// Đường dẫn: src/main/java/com/gr6/SmartCart/modules/finance_core/service/VoucherService.java
 package com.gr6.SmartCart.modules.finance_core.service;
 
+import com.gr6.SmartCart.modules.finance_core.dto.ShopVoucherResponse;
+
+import java.util.List;
+
 public interface VoucherService {
-    // Yêu cầu truyền thêm userId
-    Long calculateDiscount(String code, Long totalAmount, Long shopId, Long userId);
-    void useVoucher(String code, Long userId);
+
+    List<ShopVoucherResponse> getShopVouchers(
+            Long shopId,
+            Long userId,
+            Long orderValue
+    );
+
+    Long calculateDiscount(
+            String code,
+            Long totalAmount,
+            Long shopId,
+            Long userId
+    );
+
+    void useVoucher(
+            String code,
+            Long userId
+    );
 }

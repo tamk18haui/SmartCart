@@ -33,6 +33,9 @@ public class Product {
     @Column(length = 100)
     private String brand;
 
+    @Column(columnDefinition = "int default 0")
+    private Integer soldCount = 0;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "product_condition", nullable = false, length = 50)
     private ProductCondition condition;

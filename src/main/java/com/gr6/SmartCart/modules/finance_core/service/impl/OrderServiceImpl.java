@@ -280,6 +280,10 @@ public class OrderServiceImpl implements OrderService {
         User user = getCurrentUser();
         Address address = getCheckoutAddress(request.getAddressId(), user);
 
+        System.out.println("========== CHECKOUT PREVIEW DEBUG ==========");
+        System.out.println("checkoutSource = " + request.getCheckoutSource());
+        System.out.println("shopOrders size = " + (request.getShopOrders() == null ? 0 : request.getShopOrders().size()));
+
         long totalItemPrice = 0L;
         long totalShippingFee = 0L;
         long totalDiscount = 0L;
