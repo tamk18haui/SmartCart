@@ -14,6 +14,10 @@ public class Message {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long messageId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conversation_id")
+    private Conversation conversation;
+
     @ManyToOne @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
@@ -25,4 +29,6 @@ public class Message {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    private LocalDateTime readAt;
 }
