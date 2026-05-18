@@ -1,0 +1,61 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: SmartCart
+
+  # 1. Cấu hình database
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASS}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # 2. Cấu hình jpa/hibernate
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    open-in-view: false
+
+  # 3. Cấu hình upload file (Dành cho upload ảnh sản phẩm/avatar)
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# 4. cấu hình cloudinary
+cloudinary:
+  cloud-name: ${CLOUD_NAME}
+  api-key: ${CLOUD_KEY}
+  api-secret: ${CLOUD_SECRET}
+
+# 5. cấu hình jwt
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+
+# 6. Cấu hình Swagger/OpenAPI
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+
+# ========================================================
+# 8. CẤU HÌNH TÙY CHỈNH (CUSTOM PROPERTIES)
+# Dành cho CORS và các biến tự định nghĩa trong code
+# ========================================================
+# Cách 1: Fix cứng URL nếu đang code ở máy (dùng cho React/Vue và Máy ảo Android)
+frontend-url: http://localhost:3000,http://10.0.2.2:8080,http://192.168.2.22:8080
+
+# Cách 2: Nếu muốn dùng biến môi trường để sau này đưa lên server thật thì dùng dòng này:
+# frontend-url: ${FRONTEND_URL:http://localhost:3000,http://10.0.2.2:8080}
