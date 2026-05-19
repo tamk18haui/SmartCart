@@ -26,9 +26,13 @@ public class SecurityFilterChainConfig {
         http
                 .cors(cors -> cors.configurationSource(request -> {
                     var corsConfig = new org.springframework.web.cors.CorsConfiguration();
-                    corsConfig.setAllowedOrigins(java.util.List.of(frontendUrl));
+                    corsConfig.setAllowedOriginPatterns(java.util.Arrays.stream(frontendUrl.split(","))
+                            .map(String::trim)
+                            .filter(origin -> !origin.isBlank())
+                            .toList());
                     corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
                     corsConfig.setAllowedHeaders(java.util.List.of("*"));
+                    corsConfig.setAllowCredentials(true);
                     return corsConfig;
                 }))
                 .csrf(csrf -> csrf.disable())
@@ -44,6 +48,11 @@ public class SecurityFilterChainConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+
+                                // WebSocket handshake, JWT sẽ được kiểm tra ở StompAuthChannelInterceptor
+                                "/ws-chat",
+                                "/ws-chat/**",
+                                "/ws/**",
 
                                 // Auth v1: login/register hiện tại
                                 "/api/v1/auth/**",
