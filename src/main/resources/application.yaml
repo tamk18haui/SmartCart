@@ -59,3 +59,21 @@ frontend-url: http://localhost:3000,http://10.0.2.2:8080,http://192.168.2.22:808
 
 # Cách 2: Nếu muốn dùng biến môi trường để sau này đưa lên server thật thì dùng dòng này:
 # frontend-url: ${FRONTEND_URL:http://localhost:3000,http://10.0.2.2:8080}
+# Public URL backend. Nếu chạy local để MoMo/VNPay callback được thì nên dùng ngrok
+app:
+  public-base-url: http://localhost:8080
+
+payment:
+  # MOMO TEST
+  momo:
+    endpoint: https://test-payment.momo.vn/v2/gateway/api/create
+    partner-code: MOMOBKUN20180529
+    access-key: klm05TvNBzhg7h7j
+    secret-key: at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa
+    request-type: captureWallet
+
+  # VNPAY SANDBOX
+  vnpay:
+    url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+    tmn-code: YOUR_VNPAY_TMN_CODE
+    hash-secret: YOUR_VNPAY_HASH_SECRET
