@@ -158,6 +158,8 @@ public class SecurityFilterChainConfig {
                         .requestMatchers("/api/v1/orders/**").authenticated()
                         .requestMatchers("/api/v1/checkout/**").authenticated()
 
+                        .requestMatchers("/api/v3/admin/withdraw/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/v3/seller/withdraw/**").hasAuthority("SELLER")
                         /*
                          * =========================
                          * DEFAULT
