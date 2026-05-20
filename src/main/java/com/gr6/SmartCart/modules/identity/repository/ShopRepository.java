@@ -38,5 +38,7 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
             Pageable pageable
     );
     Optional<Shop> findByUser_Email(String email);
+    @Query(value = "SELECT s.shop_id FROM shops s JOIN users u ON s.user_id = u.user_id WHERE u.email = :email", nativeQuery = true)
+    Long findShopIdByEmail(@Param("email") String email);
 
 }

@@ -45,4 +45,12 @@ public class GlobalExceptionHandler {
     public BaseResponse<String> handleGlobalException(Exception ex) {
         return BaseResponse.error(500, "Lỗi hệ thống nội bộ, vui lòng thử lại sau!");
     }
+    @ExceptionHandler(CustomException.class)
+    public org.springframework.http.ResponseEntity<BaseResponse<String>> handleCustomException(CustomException ex) {
+        // Dùng ResponseEntity để trả về đúng HTTP Status Code động (200, 400, 404...)
+        // dựa vào ex.getCode() mà bạn set lúc throw lỗi.
+        return org.springframework.http.ResponseEntity
+                .status(ex.getCode())
+                .body(BaseResponse.error(ex.getCode(), ex.getMessage()));
+    }
 }
