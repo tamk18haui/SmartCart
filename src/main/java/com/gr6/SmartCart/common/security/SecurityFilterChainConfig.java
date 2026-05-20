@@ -90,6 +90,17 @@ public class SecurityFilterChainConfig {
 
                         /*
                          * =========================
+                         * RECOMMENDATION (PUBLIC)
+                         * =========================
+                         * Trending, search, product-based: public.
+                         * Personal: cần đăng nhập (anyRequest().authenticated()).
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/trending").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/product/**").permitAll()
+
+                        /*
+                         * =========================
                          * ADMIN
                          * =========================
                          * Quản lý buyer/seller/shop/product/admin moderation.
