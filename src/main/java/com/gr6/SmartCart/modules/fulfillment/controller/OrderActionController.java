@@ -30,7 +30,7 @@ public class OrderActionController {
     }
 
     // API Hủy đơn hàng
-    @PutMapping("/{id}/ ")
+    @PutMapping("/{id}/cancel")
     public BaseResponse<String> cancel(@PathVariable Long id, @RequestBody CancelOrderRequest request) {
         return orderActionService.cancelOrder(id, request);
     }

@@ -116,6 +116,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BaseResponse<PageResponse<ProductResponse>> getProductsByShop(Long shopId, int page, int size) {
         Page<Product> products = productRepository.findByShopShopIdAndStatusNot(
                 shopId,
@@ -197,11 +198,13 @@ public class ProductServiceImpl implements ProductService {
         }
 
         productRepository.save(product);
+        
 
         return BaseResponse.successMessage("Xóa sản phẩm thành công");
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BaseResponse<ProductResponse> getProductForSeller(Long productId) {
         Shop shop = getCurrentActiveShop();
 

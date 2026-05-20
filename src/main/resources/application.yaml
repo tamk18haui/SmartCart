@@ -55,7 +55,7 @@ springdoc:
 # Dành cho CORS và các biến tự định nghĩa trong code
 # ========================================================
 # Cách 1: Fix cứng URL nếu đang code ở máy (dùng cho React/Vue và Máy ảo Android)
-frontend-url: http://localhost:3000,http://10.0.2.2:8080,http://192.168.2.22:8080
+frontend-url: http://localhost:3000,http://localhost:5173,http://10.0.2.2:8080,http://192.168.2.22:8080
 
 # Cách 2: Nếu muốn dùng biến môi trường để sau này đưa lên server thật thì dùng dòng này:
 # frontend-url: ${FRONTEND_URL:http://localhost:3000,http://10.0.2.2:8080}
