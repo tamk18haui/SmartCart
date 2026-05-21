@@ -184,6 +184,7 @@ public class SecurityFilterChainConfig {
                          * DEFAULT
                          * =========================
                          */
+                        .requestMatchers("/api/v1/chat/**").authenticated()
                         .anyRequest().authenticated()
                 );
 

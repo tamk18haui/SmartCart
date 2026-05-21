@@ -9,14 +9,29 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 
-@Repository
 public interface ChatMessageRepository extends JpaRepository<Message, Long> {
 
-    Page<Message> findByConversationOrderByCreatedAtDesc(Conversation conversation, Pageable pageable);
+    @Query(
+            value = """
+                    SELECT m FROM Message m
+                    JOIN FETCH m.sender
+                    JOIN FETCH m.receiver
+                    JOIN FETCH m.conversation
+                    WHERE m.conversation = :conversation
+                    ORDER BY m.createdAt DESC
+                    """,
+            countQuery = """
+                    SELECT COUNT(m) FROM Message m
+                    WHERE m.conversation = :conversation
+                    """
+    )
+    Page<Message> findMessagesWithUsers(
+            @Param("conversation") Conversation conversation,
+            Pageable pageable
+    );
 
     long countByConversationAndReceiverAndReadAtIsNull(Conversation conversation, User receiver);
 

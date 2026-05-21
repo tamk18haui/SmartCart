@@ -38,6 +38,7 @@ public class LoginServiceImpl implements LoginService {
         // 4. Chuẩn bị dữ liệu trả về
         Map<String, Object> data = new HashMap<>();
         data.put("accessToken", token);
+        data.put("userId", user.getUserId());
         data.put("fullName", user.getFullName());
         data.put("email", user.getEmail());
         data.put("role", user.getRole());

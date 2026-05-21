@@ -66,6 +66,7 @@ public class ChatService {
         return toMessageResponse(saved);
     }
 
+    @Transactional
     public List<ConversationResponse> getMyConversations(Authentication authentication) {
         User currentUser = getUserByEmail(authentication.getName());
         return conversationRepository.findAllByUser(currentUser)
@@ -75,6 +76,7 @@ public class ChatService {
                 .toList();
     }
 
+    @Transactional
     public Page<ChatMessageResponse> getMessagesWithUser(Authentication authentication, Long partnerId, int page, int size) {
         User currentUser = getUserByEmail(authentication.getName());
         User partner = userRepository.findById(partnerId)
@@ -84,7 +86,7 @@ public class ChatService {
                 .orElseThrow(() -> new RuntimeException("Chưa có cuộc trò chuyện"));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return messageRepository.findByConversationOrderByCreatedAtDesc(conversation, pageable)
+        return messageRepository.findMessagesWithUsers(conversation, pageable)
                 .map(this::toMessageResponse);
     }
 

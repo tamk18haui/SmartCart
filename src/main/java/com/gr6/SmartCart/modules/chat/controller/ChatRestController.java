@@ -1,9 +1,11 @@
 package com.gr6.SmartCart.modules.chat.controller;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
+import com.gr6.SmartCart.modules.chat.dto.ChatMessageRequest;
 import com.gr6.SmartCart.modules.chat.dto.ChatMessageResponse;
 import com.gr6.SmartCart.modules.chat.dto.ConversationResponse;
 import com.gr6.SmartCart.modules.chat.service.ChatService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
@@ -33,8 +35,26 @@ public class ChatRestController {
         return BaseResponse.success(chatService.getMessagesWithUser(authentication, partnerId, page, size));
     }
 
+    // Dùng để fallback nếu WebSocket chưa kết nối được
+    @PostMapping("/messages")
+    public BaseResponse<ChatMessageResponse> sendMessage(
+            Authentication authentication,
+            @Valid @RequestBody ChatMessageRequest request
+    ) {
+        return BaseResponse.success_data(
+                "Gửi tin nhắn thành công",
+                chatService.saveMessage(authentication.getName(), request)
+        );
+    }
+
     @PatchMapping("/messages/{partnerId}/read")
-    public BaseResponse<Integer> markAsRead(Authentication authentication, @PathVariable Long partnerId) {
-        return BaseResponse.success_data("Đã đánh dấu đã đọc", chatService.markAsRead(authentication, partnerId));
+    public BaseResponse<Integer> markAsRead(
+            Authentication authentication,
+            @PathVariable Long partnerId
+    ) {
+        return BaseResponse.success_data(
+                "Đã đánh dấu đã đọc",
+                chatService.markAsRead(authentication, partnerId)
+        );
     }
 }
