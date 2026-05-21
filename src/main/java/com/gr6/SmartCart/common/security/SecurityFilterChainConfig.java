@@ -171,6 +171,14 @@ public class SecurityFilterChainConfig {
 
                         .requestMatchers("/api/v3/admin/withdraw/**").hasAuthority("ADMIN")
                         .requestMatchers("/api/v3/seller/withdraw/**").hasAuthority("SELLER")
+
+                        /*
+                         * =========================
+                         * ANALYTICS (THỐNG KÊ & BÁO CÁO)
+                         * =========================
+                         */
+                        .requestMatchers("/api/v3/admin/analytics/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/v3/seller/analytics/**").hasAuthority("SELLER")
                         /*
                          * =========================
                          * DEFAULT
