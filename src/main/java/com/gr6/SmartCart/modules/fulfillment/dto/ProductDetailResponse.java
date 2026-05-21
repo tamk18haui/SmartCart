@@ -1,51 +1,74 @@
 package com.gr6.SmartCart.modules.fulfillment.dto;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Data
 @Builder
-@AllArgsConstructor
-@NoArgsConstructor
 public class ProductDetailResponse {
+
     private Long productId;
+
+    private Long categoryId;
+    private String categoryName;
+
     private String name;
     private String description;
     private String brand;
     private BigDecimal basePrice;
     private List<String> imageUrls;
+
+    private Long shopId;
     private String shopName;
+    private String shopImageUrl;
+
     private Integer totalStock;
+    private Integer soldQuantity;
+    private Integer totalSold;
+    private Double averageRating;
+    private Integer reviewCount;
+
     private String status;
 
-    // --- PHẦN QUAN TRỌNG ĐỂ VẼ NÚT CHỌN MÀU/SIZE ---
     private List<OptionGroupDTO> optionGroups;
     private List<VariantDTO> variants;
     private List<ReviewDTO> reviews;
 
-    @Data @Builder
+    @Data
+    @Builder
     public static class OptionGroupDTO {
-        private String name; // Ví dụ: "Màu sắc", "Kích cỡ"
-        private List<String> values; // Ví dụ: ["Đỏ", "Xanh"], ["S", "M"]
+        private String name;
+        private List<String> values;
     }
 
-    @Data @Builder
+    @Data
+    @Builder
     public static class VariantDTO {
         private Long variantId;
         private String sku;
         private BigDecimal price;
         private Integer stockQuantity;
         private String imageUrl;
-        private Map<String, String> attributes; // Ví dụ: {"Màu sắc": "Đỏ", "Size": "S"}
+        private Boolean isDefault;
+        private String status;
+        private Map<String, String> attributes;
     }
 
-    @Data @Builder
+    @Data
+    @Builder
     public static class ReviewDTO {
+        private Long reviewId;
         private Integer rating;
         private String comment;
+        private String imageUrl;
         private String userName;
+        private String sellerReply;
+        private LocalDateTime createdAt;
+        private LocalDateTime repliedAt;
     }
 }

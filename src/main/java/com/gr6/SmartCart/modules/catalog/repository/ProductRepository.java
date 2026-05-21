@@ -10,16 +10,26 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    Page<Product> findByShopShopIdAndStatusNot(Long shopId, ProductStatus status, Pageable pageable);
+    Page<Product> findByShopShopIdAndStatusNot(
+            Long shopId,
+            ProductStatus status,
+            Pageable pageable
+    );
 
-    Optional<Product> findByProductIdAndShopShopIdAndStatusNot(Long productId, Long shopId, ProductStatus status);
+    Optional<Product> findByProductIdAndShopShopIdAndStatusNot(
+            Long productId,
+            Long shopId,
+            ProductStatus status
+    );
 
     @EntityGraph(attributePaths = {"shop", "category", "variants"})
     @Query("SELECT p FROM Product p " +
@@ -75,5 +85,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "AND TRIM(p.brand) <> '' " +
             "AND (:keyword IS NULL OR :keyword = '' OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "ORDER BY p.brand ASC")
-    List<String> searchDistinctBrands(@Param("keyword") String keyword, Pageable pageable);
+    List<String> searchDistinctBrands(
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    Long countByShop_ShopIdAndStatus(
+            Long shopId,
+            ProductStatus status
+    );
+
+    Page<Product> findByShop_ShopIdAndStatusOrderByProductIdDesc(
+            Long shopId,
+            ProductStatus status,
+            Pageable pageable
+    );
 }

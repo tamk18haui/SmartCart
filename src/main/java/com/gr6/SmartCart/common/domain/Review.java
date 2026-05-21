@@ -1,24 +1,45 @@
 package com.gr6.SmartCart.common.domain;
 
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
-@Entity @Table(name = "Reviews")
+import java.time.LocalDateTime;
+
+@Entity
+@Table(
+        name = "Reviews",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_review_order_item",
+                        columnNames = {"order_item_id"}
+                )
+        }
+)
 @Getter
 @Setter
 public class Review {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long reviewId;
 
-    @OneToOne @JoinColumn(name = "order_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    @ManyToOne @JoinColumn(name = "user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_item_id", nullable = false)
+    private OrderItem orderItem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne @JoinColumn(name = "product_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
     @Column(nullable = false)
@@ -29,4 +50,16 @@ public class Review {
 
     @Column(columnDefinition = "TEXT")
     private String imageUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String sellerReply;
+
+    private LocalDateTime repliedAt;
+
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

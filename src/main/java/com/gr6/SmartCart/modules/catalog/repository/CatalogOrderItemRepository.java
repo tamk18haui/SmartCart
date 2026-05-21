@@ -7,10 +7,32 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface CatalogOrderItemRepository extends JpaRepository<OrderItem, Long> {
 
-    // Tính tổng số lượng hàng đã bán (Chỉ tính đơn DELIVERED)
-    @Query("SELECT COALESCE(SUM(oi.quantity), 0) FROM OrderItem oi WHERE oi.variant.product.productId = :productId AND oi.shopOrder.status = :status")
-    Integer getSoldQuantityByProductId(@Param("productId") Long productId, @Param("status") OrderStatus status);
+    // Giữ method cũ: tính tổng số lượng đã bán theo 1 trạng thái đơn
+    @Query("""
+            SELECT COALESCE(SUM(oi.quantity), 0)
+            FROM OrderItem oi
+            WHERE oi.variant.product.productId = :productId
+            AND oi.shopOrder.status = :status
+            """)
+    Integer getSoldQuantityByProductId(
+            @Param("productId") Long productId,
+            @Param("status") OrderStatus status
+    );
+
+    // Thêm method mới: tính tổng số lượng đã bán theo nhiều trạng thái đơn
+    @Query("""
+            SELECT COALESCE(SUM(oi.quantity), 0)
+            FROM OrderItem oi
+            WHERE oi.variant.product.productId = :productId
+            AND oi.shopOrder.status IN :statuses
+            """)
+    Integer getSoldQuantityByProductId(
+            @Param("productId") Long productId,
+            @Param("statuses") List<OrderStatus> statuses
+    );
 }

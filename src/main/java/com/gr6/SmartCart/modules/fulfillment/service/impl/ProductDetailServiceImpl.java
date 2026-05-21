@@ -2,14 +2,16 @@ package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Product;
-import com.gr6.SmartCart.common.domain.ProductOption;
 import com.gr6.SmartCart.common.domain.ProductOptionValue;
 import com.gr6.SmartCart.common.domain.ProductVariant;
 import com.gr6.SmartCart.common.domain.Review;
+import com.gr6.SmartCart.common.domain.VariantOptionValue;
 import com.gr6.SmartCart.common.enums.CategoryStatus;
+import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.ShopStatus;
 import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.modules.catalog.repository.CatalogOrderItemRepository;
 import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
 import com.gr6.SmartCart.modules.fulfillment.dto.ProductDetailResponse;
 import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
@@ -18,11 +20,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +35,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
 
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
+    private final CatalogOrderItemRepository catalogOrderItemRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -41,26 +47,28 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return BaseResponse.error(404, "Sản phẩm hiện không khả dụng.");
         }
 
-        List<ProductVariant> activeVariants = safeList(product.getVariants()).stream()
-                .filter(v -> v.getStatus() == VariantStatus.ACTIVE)
-                .toList();
+        List<ProductVariant> activeVariants = safeList(product.getVariants())
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(variant -> variant.getStatus() == null || variant.getStatus() == VariantStatus.ACTIVE)
+                .collect(Collectors.toList());
 
         if (activeVariants.isEmpty()) {
             return BaseResponse.error(404, "Sản phẩm hiện không còn phân loại khả dụng.");
         }
 
-        List<ProductDetailResponse.OptionGroupDTO> optionGroups = safeList(product.getOptions()).stream()
-                .filter(Objects::nonNull)
-                .map(this::mapOptionGroup)
-                .toList();
+        List<ProductDetailResponse.OptionGroupDTO> optionGroups = buildOptionGroupsFromActiveVariants(activeVariants);
 
         List<ProductDetailResponse.VariantDTO> variantDTOs = activeVariants.stream()
                 .map(this::mapVariant)
-                .toList();
+                .collect(Collectors.toList());
 
-        List<ProductDetailResponse.ReviewDTO> reviewDTOs = reviewRepository.findByProductId(productId).stream()
+        List<Review> reviews = reviewRepository.findByProductId(productId);
+
+        List<ProductDetailResponse.ReviewDTO> reviewDTOs = safeList(reviews)
+                .stream()
                 .map(this::mapReview)
-                .toList();
+                .collect(Collectors.toList());
 
         int totalStock = activeVariants.stream()
                 .map(ProductVariant::getStockQuantity)
@@ -68,16 +76,38 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .mapToInt(Integer::intValue)
                 .sum();
 
+        int soldQuantity = safeInteger(catalogOrderItemRepository.getSoldQuantityByProductId(
+                productId,
+                List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED)
+        ));
+
+        double averageRating = calculateAverageRating(reviews);
+        int reviewCount = reviews == null ? 0 : reviews.size();
+
         ProductDetailResponse response = ProductDetailResponse.builder()
                 .productId(product.getProductId())
+
+                .categoryId(product.getCategory() != null ? product.getCategory().getCategoryId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getCategoryName() : null)
+
                 .name(product.getName())
                 .description(product.getDescription())
                 .brand(product.getBrand())
                 .basePrice(product.getBasePrice())
                 .imageUrls(splitImageUrls(product.getImageUrls()))
+
+                .shopId(product.getShop() != null ? product.getShop().getShopId() : null)
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
+                .shopImageUrl(null)
+
                 .totalStock(totalStock)
+                .soldQuantity(soldQuantity)
+                .totalSold(soldQuantity)
+                .averageRating(averageRating)
+                .reviewCount(reviewCount)
+
                 .status(product.getStatus() != null ? product.getStatus().name() : null)
+
                 .optionGroups(optionGroups)
                 .variants(variantDTOs)
                 .reviews(reviewDTOs)
@@ -87,71 +117,135 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     }
 
     private boolean isSellableProduct(Product product) {
-        if (product.getStatus() != ProductStatus.ACTIVE) {
+        if (product == null || product.getStatus() != ProductStatus.ACTIVE) {
             return false;
         }
+
         if (product.getShop() == null || product.getShop().getStatus() != ShopStatus.ACTIVE) {
             return false;
         }
-        return product.getCategory() != null && product.getCategory().getCategoryStatus() == CategoryStatus.ACTIVE;
+
+        return product.getCategory() != null
+                && product.getCategory().getCategoryStatus() == CategoryStatus.ACTIVE;
     }
 
-    private ProductDetailResponse.OptionGroupDTO mapOptionGroup(ProductOption option) {
-        List<String> values = safeList(option.getValues()).stream()
-                .filter(Objects::nonNull)
-                .map(ProductOptionValue::getValue)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+    private List<ProductDetailResponse.OptionGroupDTO> buildOptionGroupsFromActiveVariants(
+            List<ProductVariant> activeVariants
+    ) {
+        Map<String, LinkedHashSet<String>> optionMap = new LinkedHashMap<>();
 
-        return ProductDetailResponse.OptionGroupDTO.builder()
-                .name(option.getName())
-                .values(values)
-                .build();
+        for (ProductVariant variant : activeVariants) {
+            for (VariantOptionValue link : safeList(variant.getVariantOptionValues())) {
+                if (link == null || link.getOptionValue() == null) continue;
+
+                ProductOptionValue optionValue = link.getOptionValue();
+
+                if (optionValue.getProductOption() == null) continue;
+
+                String optionName = optionValue.getProductOption().getName();
+                String value = optionValue.getValue();
+
+                if (isBlank(optionName) || isBlank(value)) continue;
+
+                optionMap
+                        .computeIfAbsent(optionName.trim(), key -> new LinkedHashSet<>())
+                        .add(value.trim());
+            }
+        }
+
+        List<ProductDetailResponse.OptionGroupDTO> result = new ArrayList<>();
+
+        for (Map.Entry<String, LinkedHashSet<String>> entry : optionMap.entrySet()) {
+            result.add(ProductDetailResponse.OptionGroupDTO.builder()
+                    .name(entry.getKey())
+                    .values(new ArrayList<>(entry.getValue()))
+                    .build());
+        }
+
+        return result;
     }
 
     private ProductDetailResponse.VariantDTO mapVariant(ProductVariant variant) {
-        Map<String, String> attributes = new HashMap<>();
-
-        safeList(variant.getVariantOptionValues()).forEach(link -> {
-            if (link == null || link.getOptionValue() == null || link.getOptionValue().getProductOption() == null) {
-                return;
-            }
-            attributes.put(
-                    link.getOptionValue().getProductOption().getName(),
-                    link.getOptionValue().getValue()
-            );
-        });
-
         return ProductDetailResponse.VariantDTO.builder()
                 .variantId(variant.getVariantId())
                 .sku(variant.getSku())
                 .price(variant.getPrice())
                 .stockQuantity(variant.getStockQuantity())
                 .imageUrl(variant.getImageUrl())
-                .attributes(attributes)
+                .isDefault(variant.getIsDefault())
+                .status(variant.getStatus() != null ? variant.getStatus().name() : null)
+                .attributes(buildVariantAttributes(variant))
                 .build();
+    }
+
+    private Map<String, String> buildVariantAttributes(ProductVariant variant) {
+        Map<String, String> attrs = new LinkedHashMap<>();
+
+        for (VariantOptionValue link : safeList(variant.getVariantOptionValues())) {
+            if (link == null || link.getOptionValue() == null) continue;
+
+            ProductOptionValue optionValue = link.getOptionValue();
+
+            if (optionValue.getProductOption() == null) continue;
+
+            String optionName = optionValue.getProductOption().getName();
+            String value = optionValue.getValue();
+
+            if (isBlank(optionName) || isBlank(value)) continue;
+
+            attrs.put(optionName.trim(), value.trim());
+        }
+
+        return attrs;
     }
 
     private ProductDetailResponse.ReviewDTO mapReview(Review review) {
         return ProductDetailResponse.ReviewDTO.builder()
+                .reviewId(review.getReviewId())
                 .rating(review.getRating())
                 .comment(review.getComment())
-                .userName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng")
+                .imageUrl(review.getImageUrl())
+                .userName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng SmartCart")
+                .sellerReply(review.getSellerReply())
+                .createdAt(review.getCreatedAt())
+                .repliedAt(review.getRepliedAt())
                 .build();
     }
 
     private List<String> splitImageUrls(String imageUrls) {
-        if (imageUrls == null || imageUrls.isBlank()) {
+        if (isBlank(imageUrls)) {
             return List.of();
         }
+
         return Arrays.stream(imageUrls.split(","))
                 .map(String::trim)
-                .filter(s -> !s.isBlank())
-                .toList();
+                .filter(value -> !value.isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    private double calculateAverageRating(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return 0.0;
+        }
+
+        return reviews.stream()
+                .filter(Objects::nonNull)
+                .map(Review::getRating)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .average()
+                .orElse(0.0);
+    }
+
+    private int safeInteger(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private <T> List<T> safeList(List<T> list) {
         return list == null ? List.of() : list;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }
