@@ -1,6 +1,7 @@
 package com.gr6.SmartCart.common.security;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -10,6 +11,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -17,9 +19,22 @@ public class SecurityFilterChainConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Value("${frontend-url}")
+    private String frontendUrl;
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(request -> {
+                    var corsConfig = new org.springframework.web.cors.CorsConfiguration();
+                    corsConfig.setAllowedOriginPatterns(java.util.Arrays.stream(frontendUrl.split(","))
+                            .map(String::trim)
+                            .filter(origin -> !origin.isBlank())
+                            .toList());
+                    corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+                    corsConfig.setAllowedHeaders(java.util.List.of("*"));
+                    corsConfig.setAllowCredentials(true);
+                    return corsConfig;
+                }))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -33,6 +48,11 @@ public class SecurityFilterChainConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+
+                                // WebSocket handshake, JWT sẽ được kiểm tra ở StompAuthChannelInterceptor
+                                "/ws-chat",
+                                "/ws-chat/**",
+                                "/ws/**",
 
                                 // Auth v1: login/register hiện tại
                                 "/api/v1/auth/**",
@@ -52,6 +72,7 @@ public class SecurityFilterChainConfig {
                                 // Chi tiết sản phẩm public
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vouchers/shop/**").permitAll()
 
                         /*
                          * =========================
@@ -66,6 +87,17 @@ public class SecurityFilterChainConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/categories/**").hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/categories/**").hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/categories/**").hasAuthority("ADMIN")
+
+                        /*
+                         * =========================
+                         * RECOMMENDATION (PUBLIC)
+                         * =========================
+                         * Trending, search, product-based: public.
+                         * Personal: cần đăng nhập (anyRequest().authenticated()).
+                         */
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/trending").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/product/**").permitAll()
 
                         /*
                          * =========================
@@ -137,11 +169,22 @@ public class SecurityFilterChainConfig {
                         .requestMatchers("/api/v1/orders/**").authenticated()
                         .requestMatchers("/api/v1/checkout/**").authenticated()
 
+                        .requestMatchers("/api/v3/admin/withdraw/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/v3/seller/withdraw/**").hasAuthority("SELLER")
+
+                        /*
+                         * =========================
+                         * ANALYTICS (THỐNG KÊ & BÁO CÁO)
+                         * =========================
+                         */
+                        .requestMatchers("/api/v3/admin/analytics/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/v3/seller/analytics/**").hasAuthority("SELLER")
                         /*
                          * =========================
                          * DEFAULT
                          * =========================
                          */
+                        .requestMatchers("/api/v1/chat/**").authenticated()
                         .anyRequest().authenticated()
                 );
 

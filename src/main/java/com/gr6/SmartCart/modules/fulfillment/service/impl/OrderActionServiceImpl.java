@@ -1,12 +1,7 @@
 package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
 import com.gr6.SmartCart.common.base.BaseResponse;
-import com.gr6.SmartCart.common.domain.Order;
-import com.gr6.SmartCart.common.domain.OrderItem;
-import com.gr6.SmartCart.common.domain.ProductVariant;
-import com.gr6.SmartCart.common.domain.ShopOrder;
-import com.gr6.SmartCart.common.domain.Transaction;
-import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.domain.*;
 import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.PaymentMethod;
 import com.gr6.SmartCart.common.enums.PaymentStatus;
@@ -15,6 +10,7 @@ import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
 import com.gr6.SmartCart.modules.finance_core.repository.OrderRepository;
 import com.gr6.SmartCart.modules.finance_core.repository.ShopOrderRepository;
 import com.gr6.SmartCart.modules.finance_core.repository.TransactionRepository;
+import com.gr6.SmartCart.modules.fulfillment.dto.CancelOrderRequest;
 import com.gr6.SmartCart.modules.fulfillment.dto.UpdateShopOrderStatusRequest;
 import com.gr6.SmartCart.modules.fulfillment.service.OrderActionService;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
@@ -35,7 +31,6 @@ public class OrderActionServiceImpl implements OrderActionService {
     private final ProductVariantRepository variantRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
-
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -265,5 +260,47 @@ public class OrderActionServiceImpl implements OrderActionService {
         syncParentOrderStatus(shopOrder.getOrder());
 
         return BaseResponse.successMessage("Cập nhật trạng thái đơn hàng thành công!");
+    }
+
+    @Override
+    @Transactional
+    public BaseResponse<String> confirmOrder(Long orderId) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        ShopOrder order = shopOrderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng!"));
+
+        if (!order.getShop().getUser().getEmail().equals(email)) {
+            return BaseResponse.error(404, "Bạn không có quyền xử lý đơn hàng này!");
+        }
+
+        order.setStatus(OrderStatus.SHIPPING);
+        shopOrderRepository.save(order);
+        return BaseResponse.success("Xác nhận đơn hàng thành công!");
+    }
+
+    @Override
+    @Transactional
+    public BaseResponse<String> cancelOrder(Long orderId, CancelOrderRequest request) {
+        // 1. Tìm đơn hàng con của Shop (Shop_Orders)
+        ShopOrder shopOrder = shopOrderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng!"));
+
+        // 2. Cập nhật trạng thái sang CANCELLED và lưu lý do
+        shopOrder.setStatus(OrderStatus.CANCELLED);
+        shopOrder.setCancelReason(request.getCancelReason());
+
+        // 3. DUYỆT DANH SÁCH MÓN HÀNG (Order_Items) để hoàn kho
+        if (shopOrder.getItems() != null) {
+            for (OrderItem item : shopOrder.getItems()) {
+                var variant = item.getVariant(); // Đổi getProductVariant() -> getVariant()
+                if (variant != null) {
+                    int newStock = variant.getStockQuantity() + item.getQuantity();
+                    variant.setStockQuantity(newStock);
+                }
+            }
+        }
+
+        shopOrderRepository.save(shopOrder);
+        return BaseResponse.successMessage( "Đã hủy đơn và hoàn trả số lượng vào kho thành công.");
     }
 }

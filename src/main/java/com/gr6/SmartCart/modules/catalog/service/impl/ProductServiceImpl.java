@@ -48,6 +48,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
 
+    private static final int MAX_BRAND_SUGGESTIONS = 30;
+
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final ProductOptionRepository optionRepository;
@@ -55,29 +57,6 @@ public class ProductServiceImpl implements ProductService {
     private final VariantOptionValueRepository variantOptionValueRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
-
-    private Shop getCurrentActiveShop() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new RuntimeException("Bạn chưa đăng nhập!");
-        }
-
-        User user = userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
-
-        Shop shop = user.getShop();
-
-        if (shop == null) {
-            throw new RuntimeException("Tài khoản hiện tại chưa đăng ký shop!");
-        }
-
-        if (shop.getStatus() != ShopStatus.ACTIVE) {
-            throw new RuntimeException("Shop chưa được duyệt hoặc đã bị khóa!");
-        }
-
-        return shop;
-    }
 
     @Override
     @Transactional
@@ -158,7 +137,11 @@ public class ProductServiceImpl implements ProductService {
         Shop shop = getCurrentActiveShop();
 
         Product product = productRepository
-                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .findByProductIdAndShopShopIdAndStatusNot(
+                        productId,
+                        shop.getShopId(),
+                        ProductStatus.DELETED
+                )
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền xem!"));
 
         return BaseResponse.success(ProductResponse.fromEntity(product));
@@ -170,7 +153,11 @@ public class ProductServiceImpl implements ProductService {
         Shop shop = getCurrentActiveShop();
 
         Product product = productRepository
-                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .findByProductIdAndShopShopIdAndStatusNot(
+                        productId,
+                        shop.getShopId(),
+                        ProductStatus.DELETED
+                )
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền sửa!"));
 
         if (product.getStatus() == ProductStatus.BANNED) {
@@ -213,7 +200,11 @@ public class ProductServiceImpl implements ProductService {
         Shop shop = getCurrentActiveShop();
 
         Product product = productRepository
-                .findByProductIdAndShopShopIdAndStatusNot(productId, shop.getShopId(), ProductStatus.DELETED)
+                .findByProductIdAndShopShopIdAndStatusNot(
+                        productId,
+                        shop.getShopId(),
+                        ProductStatus.DELETED
+                )
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền xóa!"));
 
         if (product.getStatus() == ProductStatus.BANNED) {
@@ -236,10 +227,33 @@ public class ProductServiceImpl implements ProductService {
     public BaseResponse<List<String>> getBrandSuggestions(String keyword) {
         List<String> brands = productRepository.searchDistinctBrands(
                 normalizeKeyword(keyword),
-                PageRequest.of(0, 30)
+                PageRequest.of(0, MAX_BRAND_SUGGESTIONS)
         );
 
         return BaseResponse.success_data("Lấy danh sách thương hiệu thành công", brands);
+    }
+
+    private Shop getCurrentActiveShop() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new RuntimeException("Bạn chưa đăng nhập!");
+        }
+
+        User user = userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
+
+        Shop shop = user.getShop();
+
+        if (shop == null) {
+            throw new RuntimeException("Tài khoản hiện tại chưa đăng ký shop!");
+        }
+
+        if (shop.getStatus() != ShopStatus.ACTIVE) {
+            throw new RuntimeException("Shop chưa được duyệt hoặc đã bị khóa!");
+        }
+
+        return shop;
     }
 
     private void createDefaultVariant(Product product, Integer stockQuantity) {

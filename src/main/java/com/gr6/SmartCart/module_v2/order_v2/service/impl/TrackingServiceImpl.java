@@ -2,6 +2,7 @@ package com.gr6.SmartCart.module_v2.order_v2.service.impl;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.ShopOrder;
 import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.modules.finance_core.repository.ShopOrderRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import com.gr6.SmartCart.module_v2.order_v2.dto.OrderHistoryResponse;
@@ -15,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.gr6.SmartCart.common.domain.OrderItem;
+import com.gr6.SmartCart.common.domain.Product;
+import com.gr6.SmartCart.common.domain.ProductVariant;
 
 @Service
 @RequiredArgsConstructor
@@ -33,18 +37,31 @@ public class TrackingServiceImpl implements TrackingService {
     @Transactional(readOnly = true)
     public BaseResponse<List<OrderHistoryResponse>> getOrderHistory() {
         User user = getCurrentBuyer();
-        
-        List<ShopOrder> shopOrders = shopOrderRepository.findByOrder_User_EmailOrderByShopOrderIdDesc(user.getEmail());
 
-        List<OrderHistoryResponse> responses = shopOrders.stream().map(order -> OrderHistoryResponse.builder()
-                .shopOrderId(order.getShopOrderId())
-                .shopName(order.getShop().getShopName())
-                .status(order.getStatus())
-                .totalAmount(BigDecimal.valueOf(order.getTotalAmount()))
-                .createdAt(order.getOrder().getCreatedAt())
-                .build()).collect(Collectors.toList());
+        List<ShopOrder> shopOrders =
+                shopOrderRepository.findByOrder_User_EmailOrderByShopOrderIdDesc(user.getEmail());
 
-        return BaseResponse.success_data("Lấy lịch sử đơn hàng thành công", responses);
+        List<OrderHistoryResponse> responses = shopOrders.stream()
+                .map(shopOrder -> OrderHistoryResponse.builder()
+                        .orderId(shopOrder.getOrder().getOrderId())
+                        .shopOrderId(shopOrder.getShopOrderId())
+                        .shopId(shopOrder.getShop().getShopId())
+                        .shopName(shopOrder.getShop().getShopName())
+                        .status(shopOrder.getStatus())
+                        .totalAmount(BigDecimal.valueOf(
+                                shopOrder.getTotalAmount() == null ? 0L : shopOrder.getTotalAmount()
+                        ))
+                        .createdAt(shopOrder.getOrder().getCreatedAt())
+                        .items(shopOrder.getItems().stream()
+                                .map(this::mapHistoryItem)
+                                .collect(Collectors.toList()))
+                        .build())
+                .collect(Collectors.toList());
+
+        return BaseResponse.success_data(
+                "Lấy lịch sử đơn hàng thành công",
+                responses
+        );
     }
 
     @Override
@@ -78,9 +95,53 @@ public class TrackingServiceImpl implements TrackingService {
                 .receiverName(shopOrder.getOrder().getReceiverName())
                 .shippingAddress(shopOrder.getOrder().getShippingAddress())
                 .createdAt(shopOrder.getOrder().getCreatedAt())
+                .canCancel(shopOrder.getStatus() == OrderStatus.PENDING)
                 .items(items)
                 .build();
 
         return BaseResponse.success_data("Chi tiết đơn hàng", response);
+    }
+    private OrderHistoryResponse.OrderHistoryItemResponse mapHistoryItem(OrderItem item) {
+        ProductVariant variant = item.getVariant();
+        Product product = variant.getProduct();
+
+        return OrderHistoryResponse.OrderHistoryItemResponse.builder()
+                .orderItemId(item.getOrderItemId())
+                .productId(product.getProductId())
+                .variantId(variant.getVariantId())
+                .productName(product.getName())
+                .variantSku(variant.getSku())
+                .quantity(item.getQuantity())
+                .priceAtPurchase(item.getPriceAtPurchase())
+                .imageUrl(getBestImageUrl(variant))
+                .build();
+    }
+
+    private String getBestImageUrl(ProductVariant variant) {
+        if (variant == null) return null;
+
+        if (!isBlank(variant.getImageUrl())) {
+            return variant.getImageUrl().trim();
+        }
+
+        Product product = variant.getProduct();
+
+        if (product == null || isBlank(product.getImageUrls())) {
+            return null;
+        }
+
+        String[] images = product.getImageUrls().split(",");
+
+        for (String image : images) {
+            if (!isBlank(image)) {
+                return image.trim();
+            }
+        }
+
+        return null;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

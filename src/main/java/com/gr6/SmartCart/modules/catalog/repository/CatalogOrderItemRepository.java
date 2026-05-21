@@ -12,24 +12,22 @@ import java.util.List;
 @Repository
 public interface CatalogOrderItemRepository extends JpaRepository<OrderItem, Long> {
 
-    // Giữ method cũ: tính tổng số lượng đã bán theo 1 trạng thái đơn
     @Query("""
             SELECT COALESCE(SUM(oi.quantity), 0)
             FROM OrderItem oi
             WHERE oi.variant.product.productId = :productId
-            AND oi.shopOrder.status = :status
+              AND oi.shopOrder.status = :status
             """)
     Integer getSoldQuantityByProductId(
             @Param("productId") Long productId,
             @Param("status") OrderStatus status
     );
 
-    // Thêm method mới: tính tổng số lượng đã bán theo nhiều trạng thái đơn
     @Query("""
             SELECT COALESCE(SUM(oi.quantity), 0)
             FROM OrderItem oi
             WHERE oi.variant.product.productId = :productId
-            AND oi.shopOrder.status IN :statuses
+              AND oi.shopOrder.status IN :statuses
             """)
     Integer getSoldQuantityByProductId(
             @Param("productId") Long productId,

@@ -39,3 +39,5 @@ postman/
 security/
 
 *.txt
+BcryptTest.java
+*.sql

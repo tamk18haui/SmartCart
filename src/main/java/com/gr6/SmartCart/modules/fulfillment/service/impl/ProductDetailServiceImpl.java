@@ -57,7 +57,8 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return BaseResponse.error(404, "Sản phẩm hiện không còn phân loại khả dụng.");
         }
 
-        List<ProductDetailResponse.OptionGroupDTO> optionGroups = buildOptionGroupsFromActiveVariants(activeVariants);
+        List<ProductDetailResponse.OptionGroupDTO> optionGroups =
+                buildOptionGroupsFromActiveVariants(activeVariants);
 
         List<ProductDetailResponse.VariantDTO> variantDTOs = activeVariants.stream()
                 .map(this::mapVariant)
@@ -97,6 +98,11 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .imageUrls(splitImageUrls(product.getImageUrls()))
 
                 .shopId(product.getShop() != null ? product.getShop().getShopId() : null)
+                .shopOwnerId(
+                        product.getShop() != null && product.getShop().getUser() != null
+                                ? product.getShop().getUser().getUserId()
+                                : null
+                )
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
                 .shopImageUrl(null)
 
@@ -136,16 +142,22 @@ public class ProductDetailServiceImpl implements ProductDetailService {
 
         for (ProductVariant variant : activeVariants) {
             for (VariantOptionValue link : safeList(variant.getVariantOptionValues())) {
-                if (link == null || link.getOptionValue() == null) continue;
+                if (link == null || link.getOptionValue() == null) {
+                    continue;
+                }
 
                 ProductOptionValue optionValue = link.getOptionValue();
 
-                if (optionValue.getProductOption() == null) continue;
+                if (optionValue.getProductOption() == null) {
+                    continue;
+                }
 
                 String optionName = optionValue.getProductOption().getName();
                 String value = optionValue.getValue();
 
-                if (isBlank(optionName) || isBlank(value)) continue;
+                if (isBlank(optionName) || isBlank(value)) {
+                    continue;
+                }
 
                 optionMap
                         .computeIfAbsent(optionName.trim(), key -> new LinkedHashSet<>())
@@ -182,16 +194,22 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         Map<String, String> attrs = new LinkedHashMap<>();
 
         for (VariantOptionValue link : safeList(variant.getVariantOptionValues())) {
-            if (link == null || link.getOptionValue() == null) continue;
+            if (link == null || link.getOptionValue() == null) {
+                continue;
+            }
 
             ProductOptionValue optionValue = link.getOptionValue();
 
-            if (optionValue.getProductOption() == null) continue;
+            if (optionValue.getProductOption() == null) {
+                continue;
+            }
 
             String optionName = optionValue.getProductOption().getName();
             String value = optionValue.getValue();
 
-            if (isBlank(optionName) || isBlank(value)) continue;
+            if (isBlank(optionName) || isBlank(value)) {
+                continue;
+            }
 
             attrs.put(optionName.trim(), value.trim());
         }

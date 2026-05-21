@@ -2,7 +2,6 @@ package com.gr6.SmartCart.common.domain;
 
 import com.gr6.SmartCart.common.enums.CategoryStatus;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 

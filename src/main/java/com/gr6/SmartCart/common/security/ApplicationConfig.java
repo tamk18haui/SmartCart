@@ -18,7 +18,7 @@ public class ApplicationConfig {
     public UserDetailsService userDetailsService() {
         return username -> userRepository.findByEmail(username)
                 .map(user -> {
-                    // SÁNG THÊM: Chặn tài khoản lừa đảo
+                    //  Chặn tài khoản lừa đảo
                     if (user.getStatus() == UserStatus.BANNED) {
                         throw new RuntimeException("Tài khoản của bạn đã bị khóa do vi phạm chính sách!");
                     }

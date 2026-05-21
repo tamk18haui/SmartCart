@@ -67,6 +67,16 @@ public class CategoryServiceImpl implements CategoryService {
         return BaseResponse.success_data("Lấy danh sách thành công", responses);
     }
 
+    // Hàm lấy tâts cả danh mục của admin
+    @Override
+    public BaseResponse<List<CategoryResponse>> getAllCategoriesForAdmin() {
+        List<CategoryResponse> responses = categoryRepository.findAll()
+                .stream()
+                .map(CategoryResponse::fromEntity)
+                .collect(Collectors.toList());
+
+        return BaseResponse.success_data("Lấy tất cả danh mục thành công (Admin)", responses);
+    }
     // SÁNG THÊM VÀO ĐÂY: Logic Cập nhật Danh mục
     @Override
     @Transactional

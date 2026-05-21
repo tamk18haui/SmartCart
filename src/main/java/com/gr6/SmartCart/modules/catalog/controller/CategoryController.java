@@ -25,6 +25,9 @@ public class CategoryController {
         return categoryService.getAllCategories();
     }
 
+    @GetMapping("/admin")
+    public BaseResponse<List<CategoryResponse>> getAllCategoriesForAdmin(){return categoryService.getAllCategoriesForAdmin();}
+
     // SÁNG THÊM VÀO ĐÂY: Sửa danh mục
     @PutMapping("/{id}")
     public BaseResponse<CategoryResponse> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryRequest request) {

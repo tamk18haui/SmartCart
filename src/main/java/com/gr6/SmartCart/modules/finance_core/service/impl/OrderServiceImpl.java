@@ -53,24 +53,27 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Address getCheckoutAddress(Long addressId, User user) {
+        Address address;
+
         if (addressId == null) {
-            throw new RuntimeException("Vui lòng chọn địa chỉ giao hàng!");
-        }
+            address = addressRepository
+                    .findByUserAndIsDefaultTrueAndIsDeletedFalse(user)
+                    .orElseThrow(() -> new RuntimeException("Bạn chưa có địa chỉ mặc định!"));
+        } else {
+            address = addressRepository.findById(addressId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy địa chỉ giao hàng!"));
 
-        Address address = addressRepository.findById(addressId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy địa chỉ giao hàng!"));
+            if (!address.getUser().getUserId().equals(user.getUserId())) {
+                throw new RuntimeException("Địa chỉ này không thuộc về bạn!");
+            }
 
-        if (!address.getUser().getUserId().equals(user.getUserId())) {
-            throw new RuntimeException("Địa chỉ này không thuộc về bạn!");
-        }
-
-        if (Boolean.TRUE.equals(address.getIsDeleted())) {
-            throw new RuntimeException("Địa chỉ này đã bị xóa!");
+            if (Boolean.TRUE.equals(address.getIsDeleted())) {
+                throw new RuntimeException("Địa chỉ này đã bị xóa!");
+            }
         }
 
         return address;
     }
-
     private void validateShopCanSell(Shop shop) {
         if (shop.getStatus() != ShopStatus.ACTIVE) {
             throw new RuntimeException("Shop " + shop.getShopName() + " chưa hoạt động hoặc đã bị khóa!");
@@ -272,9 +275,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BaseResponse<CheckoutPreviewResponse> getCheckoutPreview(CheckoutPreviewRequest request) {
         User user = getCurrentUser();
         Address address = getCheckoutAddress(request.getAddressId(), user);
+
+        System.out.println("========== CHECKOUT PREVIEW DEBUG ==========");
+        System.out.println("checkoutSource = " + request.getCheckoutSource());
+        System.out.println("shopOrders size = " + (request.getShopOrders() == null ? 0 : request.getShopOrders().size()));
 
         long totalItemPrice = 0L;
         long totalShippingFee = 0L;
