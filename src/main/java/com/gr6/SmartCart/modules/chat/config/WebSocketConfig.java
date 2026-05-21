@@ -14,6 +14,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
+    private final JwtHandshakeHandler jwtHandshakeHandler;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -24,12 +25,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Dùng cho Postman / Android raw WebSocket STOMP
         registry.addEndpoint("/ws-chat")
+                .setHandshakeHandler(jwtHandshakeHandler)
                 .setAllowedOriginPatterns("*");
 
-        // Dùng cho web frontend nếu dùng SockJS
         registry.addEndpoint("/ws-chat-sockjs")
+                .setHandshakeHandler(jwtHandshakeHandler)
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
     }

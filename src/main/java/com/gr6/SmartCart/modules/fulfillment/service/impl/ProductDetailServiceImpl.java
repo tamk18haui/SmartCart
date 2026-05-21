@@ -100,6 +100,11 @@ public class ProductDetailServiceImpl implements ProductDetailService {
 
                 .shopId(product.getShop() != null ? product.getShop().getShopId() : null)
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
+                .shopOwnerId(
+                        product.getShop() != null && product.getShop().getUser() != null
+                                ? product.getShop().getUser().getUserId()
+                                : null
+                )
                 .shopImageUrl(null)
 
                 .totalStock(totalStock)

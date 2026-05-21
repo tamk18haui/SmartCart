@@ -23,6 +23,7 @@ public class ProductDetailResponse {
     private List<String> imageUrls;
 
     private Long shopId;
+    private Long shopOwnerId;
     private String shopName;
     private String shopImageUrl;
 

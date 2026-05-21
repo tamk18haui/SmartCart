@@ -14,7 +14,7 @@ spring:
 
   # 2. Cấu hình jpa/hibernate
   jpa:
-    show-sql: false
+    show-sql: true
     hibernate:
       ddl-auto: update
       naming:
