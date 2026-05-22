@@ -26,12 +26,8 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long reviewId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_item_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_item_id", nullable = false, unique = true)
     private OrderItem orderItem;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -48,8 +44,13 @@ public class Review {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
+    // Lưu JSON array: ["url1","url2","url3","url4"]
     @Column(columnDefinition = "TEXT")
-    private String imageUrl;
+    private String imageUrls;
+
+    // 1 video
+    @Column(columnDefinition = "TEXT")
+    private String videoUrl;
 
     @Column(columnDefinition = "TEXT")
     private String sellerReply;

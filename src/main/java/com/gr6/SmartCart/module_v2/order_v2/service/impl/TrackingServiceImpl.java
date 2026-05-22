@@ -4,6 +4,7 @@ import com.gr6.SmartCart.common.domain.ShopOrder;
 import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.modules.finance_core.repository.ShopOrderRepository;
+import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import com.gr6.SmartCart.module_v2.order_v2.dto.OrderHistoryResponse;
 import com.gr6.SmartCart.module_v2.order_v2.dto.OrderTrackingResponse;
@@ -26,6 +27,7 @@ public class TrackingServiceImpl implements TrackingService {
 
     private final ShopOrderRepository shopOrderRepository;
     private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
 
     private User getCurrentBuyer() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -75,15 +77,26 @@ public class TrackingServiceImpl implements TrackingService {
             return BaseResponse.error(403, "Bạn không có quyền xem đơn hàng này");
         }
 
-        List<OrderTrackingResponse.TrackingItemDto> items = shopOrder.getItems().stream().map(item -> 
-            OrderTrackingResponse.TrackingItemDto.builder()
-                .productName(item.getVariant().getProduct().getName())
-                .variantSku(item.getVariant().getSku())
-                .quantity(item.getQuantity())
-                .priceAtPurchase(item.getPriceAtPurchase())
-                .imageUrl(item.getVariant().getImageUrl() != null ? item.getVariant().getImageUrl() : item.getVariant().getProduct().getImageUrls())
-                .build()
-        ).collect(Collectors.toList());
+        List<OrderTrackingResponse.TrackingItemDto> items = shopOrder.getItems()
+                .stream()
+                .map(item -> {
+                    boolean reviewed = reviewRepository.existsByOrderItem_OrderItemId(item.getOrderItemId());
+                    boolean canReview = shopOrder.getStatus() == OrderStatus.COMPLETED && !reviewed;
+
+                    return OrderTrackingResponse.TrackingItemDto.builder()
+                            .orderItemId(item.getOrderItemId())
+                            .productId(item.getVariant().getProduct().getProductId())
+                            .variantId(item.getVariant().getVariantId())
+                            .productName(item.getVariant().getProduct().getName())
+                            .variantSku(item.getVariant().getSku())
+                            .quantity(item.getQuantity())
+                            .priceAtPurchase(item.getPriceAtPurchase())
+                            .imageUrl(item.getVariant().getImageUrl())
+                            .canReview(canReview)
+                            .reviewed(reviewed)
+                            .build();
+                })
+                .toList();
 
         OrderTrackingResponse response = OrderTrackingResponse.builder()
                 .shopOrderId(shopOrder.getShopOrderId())
@@ -91,8 +104,11 @@ public class TrackingServiceImpl implements TrackingService {
                 .status(shopOrder.getStatus())
                 .totalAmount(BigDecimal.valueOf(shopOrder.getTotalAmount()))
                 .shippingFee(BigDecimal.valueOf(shopOrder.getShippingFee()))
+                .paymentMethod(shopOrder.getOrder().getPaymentMethod() == null ? null : shopOrder.getOrder().getPaymentMethod().name())
+                .paymentProvider(shopOrder.getOrder().getPaymentProvider() == null ? null : shopOrder.getOrder().getPaymentProvider().name())
                 .discountAmount(BigDecimal.valueOf(shopOrder.getDiscountAmount() != null ? shopOrder.getDiscountAmount() : 0))
                 .receiverName(shopOrder.getOrder().getReceiverName())
+                .receiverPhone(shopOrder.getOrder().getReceiverPhone())
                 .shippingAddress(shopOrder.getOrder().getShippingAddress())
                 .createdAt(shopOrder.getOrder().getCreatedAt())
                 .canCancel(shopOrder.getStatus() == OrderStatus.PENDING)

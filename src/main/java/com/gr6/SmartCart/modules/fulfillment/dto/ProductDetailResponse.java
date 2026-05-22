@@ -76,7 +76,10 @@ public class ProductDetailResponse {
         private Long reviewId;
         private Integer rating;
         private String comment;
-        private String imageUrl;
+
+        private List<String> imageUrls;
+        private String videoUrl;
+
         private String userName;
         private String sellerReply;
         private LocalDateTime createdAt;

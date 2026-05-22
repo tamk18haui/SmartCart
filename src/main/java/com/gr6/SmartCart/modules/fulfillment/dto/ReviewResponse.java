@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -24,10 +25,16 @@ public class ReviewResponse {
 
     private Long buyerId;
     private String buyerName;
+    private String buyerAvatarUrl;
 
     private Integer rating;
     private String comment;
-    private String imageUrl;
+
+    // Tối đa 4 ảnh review
+    private List<String> imageUrls;
+
+    // 1 video review
+    private String videoUrl;
 
     private String sellerReply;
 
