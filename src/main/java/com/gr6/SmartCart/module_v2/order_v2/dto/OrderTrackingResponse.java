@@ -14,12 +14,18 @@ public class OrderTrackingResponse {
     private Long shopOrderId;
     private String shopName;
     private OrderStatus status;
+
     private BigDecimal totalAmount;
     private BigDecimal shippingFee;
     private BigDecimal discountAmount;
+
     private String receiverName;
+    private String receiverPhone;
     private String shippingAddress;
+
     private LocalDateTime createdAt;
+    private String paymentMethod;
+    private String paymentProvider;
     private Boolean canCancel;
 
     private List<TrackingItemDto> items;
@@ -27,10 +33,17 @@ public class OrderTrackingResponse {
     @Data
     @Builder
     public static class TrackingItemDto {
+        private Long orderItemId;
+        private Long productId;
+        private Long variantId;
+
         private String productName;
         private String variantSku;
         private Integer quantity;
         private Long priceAtPurchase;
         private String imageUrl;
+
+        private Boolean canReview;
+        private Boolean reviewed;
     }
 }

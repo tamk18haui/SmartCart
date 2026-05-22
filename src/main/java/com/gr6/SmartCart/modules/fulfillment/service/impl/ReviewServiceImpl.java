@@ -1,5 +1,7 @@
 package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.OrderItem;
 import com.gr6.SmartCart.common.domain.Product;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -34,7 +37,16 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final OrderItemRepository orderItemRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
+    /**
+     * Lấy danh sách sản phẩm mà buyer hiện tại có thể đánh giá.
+     *
+     * Điều kiện:
+     * - User phải là BUYER.
+     * - Đơn shop phải COMPLETED.
+     * - OrderItem chưa được review.
+     */
     @Override
     @Transactional(readOnly = true)
     public BaseResponse<List<ReviewableOrderItemResponse>> getMyReviewableItems() {
@@ -50,9 +62,15 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(this::mapReviewableItem)
                 .toList();
 
-        return BaseResponse.success_data("Lấy danh sách sản phẩm có thể đánh giá thành công", response);
+        return BaseResponse.success_data(
+                "Lấy danh sách sản phẩm có thể đánh giá thành công",
+                response
+        );
     }
 
+    /**
+     * Lấy danh sách review của buyer hiện tại.
+     */
     @Override
     @Transactional(readOnly = true)
     public BaseResponse<List<ReviewResponse>> getMyReviews() {
@@ -64,9 +82,16 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(this::mapReview)
                 .toList();
 
-        return BaseResponse.success_data("Lấy danh sách đánh giá của tôi thành công", response);
+        return BaseResponse.success_data(
+                "Lấy danh sách đánh giá của tôi thành công",
+                response
+        );
     }
 
+    /**
+     * Seller xem review của shop mình.
+     * Admin xem toàn bộ review.
+     */
     @Override
     @Transactional(readOnly = true)
     public BaseResponse<List<ReviewResponse>> getShopReviews() {
@@ -86,9 +111,23 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(this::mapReview)
                 .toList();
 
-        return BaseResponse.success_data("Lấy danh sách phản hồi khách hàng thành công", response);
+        return BaseResponse.success_data(
+                "Lấy danh sách phản hồi khách hàng thành công",
+                response
+        );
     }
 
+    /**
+     * Tạo review mới.
+     *
+     * Luồng chuẩn:
+     * - Chỉ BUYER được review.
+     * - orderItemId phải tồn tại.
+     * - orderItem phải thuộc đơn hàng của buyer hiện tại.
+     * - ShopOrder phải COMPLETED.
+     * - Mỗi orderItem chỉ được review 1 lần.
+     * - Review hỗ trợ tối đa 4 ảnh và 1 video.
+     */
     @Override
     @Transactional
     public BaseResponse<ReviewResponse> createReview(ReviewCreateRequest request) {
@@ -96,6 +135,10 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (user.getRole() != UserRole.BUYER) {
             throw new RuntimeException("Chỉ người mua mới được đánh giá sản phẩm!");
+        }
+
+        if (request.getOrderItemId() == null) {
+            throw new RuntimeException("orderItemId không được để trống!");
         }
 
         OrderItem orderItem = orderItemRepository.findById(request.getOrderItemId())
@@ -126,19 +169,40 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Review review = new Review();
-        review.setOrder(shopOrder.getOrder());
+
+        // Review gắn với từng OrderItem để một đơn có nhiều sản phẩm thì review được từng sản phẩm.
         review.setOrderItem(orderItem);
+
+        // Người tạo review.
         review.setUser(user);
+
+        // Product được lấy từ variant của OrderItem.
         review.setProduct(variant.getProduct());
+
         review.setRating(request.getRating());
         review.setComment(normalizeText(request.getComment()));
-        review.setImageUrl(normalizeText(request.getImageUrl()));
 
-        Review savedReview = reviewRepository.save(review);
+        // Lưu tối đa 4 ảnh dạng JSON array.
+        review.setImageUrls(toImageUrlsJson(request.getImageUrls()));
 
-        return BaseResponse.success_data("Đánh giá sản phẩm thành công", mapReview(savedReview));
+        // Lưu tối đa 1 video.
+        review.setVideoUrl(cleanUrl(request.getVideoUrl()));
+
+        Review saved = reviewRepository.save(review);
+
+        return BaseResponse.success_data(
+                "Đánh giá sản phẩm thành công",
+                mapReview(saved)
+        );
     }
 
+    /**
+     * Cập nhật review.
+     *
+     * Chỉ chủ review mới được sửa.
+     * Nếu client gửi imageUrls thì thay toàn bộ danh sách ảnh.
+     * Nếu client gửi videoUrl thì thay video.
+     */
     @Override
     @Transactional
     public BaseResponse<ReviewResponse> updateReview(Long reviewId, ReviewUpdateRequest request) {
@@ -151,15 +215,33 @@ public class ReviewServiceImpl implements ReviewService {
             throw new RuntimeException("Bạn không có quyền sửa đánh giá này!");
         }
 
-        review.setRating(request.getRating());
+        if (request.getRating() != null) {
+            review.setRating(request.getRating());
+        }
+
         review.setComment(normalizeText(request.getComment()));
-        review.setImageUrl(normalizeText(request.getImageUrl()));
+
+        if (request.getImageUrls() != null) {
+            review.setImageUrls(toImageUrlsJson(request.getImageUrls()));
+        }
+
+        if (request.getVideoUrl() != null) {
+            review.setVideoUrl(cleanUrl(request.getVideoUrl()));
+        }
 
         Review savedReview = reviewRepository.save(review);
 
-        return BaseResponse.success_data("Cập nhật đánh giá thành công", mapReview(savedReview));
+        return BaseResponse.success_data(
+                "Cập nhật đánh giá thành công",
+                mapReview(savedReview)
+        );
     }
 
+    /**
+     * Xóa review.
+     *
+     * Chủ review hoặc ADMIN được xóa.
+     */
     @Override
     @Transactional
     public BaseResponse<String> deleteReview(Long reviewId) {
@@ -180,6 +262,13 @@ public class ReviewServiceImpl implements ReviewService {
         return BaseResponse.successMessage("Xóa đánh giá thành công");
     }
 
+    /**
+     * Seller phản hồi review.
+     *
+     * Điều kiện:
+     * - ADMIN được phản hồi mọi review.
+     * - SELLER chỉ được phản hồi review thuộc sản phẩm của shop mình.
+     */
     @Override
     @Transactional
     public BaseResponse<ReviewResponse> replyReview(Long reviewId, SellerReplyRequest request) {
@@ -189,6 +278,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đánh giá!"));
 
         boolean isAdmin = user.getRole() == UserRole.ADMIN;
+
         boolean isSellerOwner = review.getProduct() != null
                 && review.getProduct().getShop() != null
                 && review.getProduct().getShop().getUser() != null
@@ -198,14 +288,24 @@ public class ReviewServiceImpl implements ReviewService {
             throw new RuntimeException("Bạn không có quyền phản hồi đánh giá này!");
         }
 
+        if (request.getReply() == null || request.getReply().trim().isEmpty()) {
+            throw new RuntimeException("Nội dung phản hồi không được để trống!");
+        }
+
         review.setSellerReply(request.getReply().trim());
         review.setRepliedAt(LocalDateTime.now());
 
         Review savedReview = reviewRepository.save(review);
 
-        return BaseResponse.success_data("Phản hồi khách hàng thành công", mapReview(savedReview));
+        return BaseResponse.success_data(
+                "Phản hồi khách hàng thành công",
+                mapReview(savedReview)
+        );
     }
 
+    /**
+     * Lấy user hiện tại từ JWT trong SecurityContext.
+     */
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -217,6 +317,9 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
     }
 
+    /**
+     * Map OrderItem sang item có thể đánh giá.
+     */
     private ReviewableOrderItemResponse mapReviewableItem(OrderItem item) {
         ProductVariant variant = item.getVariant();
         Product product = variant != null ? variant.getProduct() : null;
@@ -248,17 +351,29 @@ public class ReviewServiceImpl implements ReviewService {
                 .build();
     }
 
+    /**
+     * Map Review entity sang response trả về Android.
+     */
     private ReviewResponse mapReview(Review review) {
         Product product = review.getProduct();
-        ProductVariant variant = review.getOrderItem() != null ? review.getOrderItem().getVariant() : null;
-        ShopOrder shopOrder = review.getOrderItem() != null ? review.getOrderItem().getShopOrder() : null;
+        ProductVariant variant = review.getOrderItem() != null
+                ? review.getOrderItem().getVariant()
+                : null;
+        ShopOrder shopOrder = review.getOrderItem() != null
+                ? review.getOrderItem().getShopOrder()
+                : null;
 
         return ReviewResponse.builder()
                 .reviewId(review.getReviewId())
 
-                .orderId(review.getOrder() != null ? review.getOrder().getOrderId() : null)
+                // Không lấy review.getOrder() nữa vì Review không map trực tiếp với Order.
+                .orderId(shopOrder != null && shopOrder.getOrder() != null
+                        ? shopOrder.getOrder().getOrderId()
+                        : null)
                 .shopOrderId(shopOrder != null ? shopOrder.getShopOrderId() : null)
-                .orderItemId(review.getOrderItem() != null ? review.getOrderItem().getOrderItemId() : null)
+                .orderItemId(review.getOrderItem() != null
+                        ? review.getOrderItem().getOrderItemId()
+                        : null)
 
                 .productId(product != null ? product.getProductId() : null)
                 .productName(product != null ? product.getName() : null)
@@ -268,11 +383,19 @@ public class ReviewServiceImpl implements ReviewService {
                 .variantSku(variant != null ? variant.getSku() : null)
 
                 .buyerId(review.getUser() != null ? review.getUser().getUserId() : null)
-                .buyerName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng SmartCart")
+                .buyerName(review.getUser() != null
+                        ? review.getUser().getFullName()
+                        : "Người dùng SmartCart")
+                .buyerAvatarUrl(review.getUser() != null
+                        ? review.getUser().getAvatarUrl()
+                        : null)
 
                 .rating(review.getRating())
                 .comment(review.getComment())
-                .imageUrl(review.getImageUrl())
+
+                // Review media mới: tối đa 4 ảnh và 1 video.
+                .imageUrls(parseImageUrls(review.getImageUrls()))
+                .videoUrl(review.getVideoUrl())
 
                 .sellerReply(review.getSellerReply())
 
@@ -282,6 +405,10 @@ public class ReviewServiceImpl implements ReviewService {
                 .build();
     }
 
+    /**
+     * Ưu tiên ảnh của variant.
+     * Nếu variant không có ảnh thì lấy ảnh đầu tiên trong product.imageUrls.
+     */
     private String resolveProductImage(Product product, ProductVariant variant) {
         if (variant != null && !isBlank(variant.getImageUrl())) {
             return variant.getImageUrl();
@@ -294,6 +421,68 @@ public class ReviewServiceImpl implements ReviewService {
         return product.getImageUrls().split(",")[0].trim();
     }
 
+    /**
+     * Chuyển List ảnh thành JSON string để lưu vào DB dạng TEXT.
+     *
+     * Giới hạn tối đa 4 ảnh.
+     */
+    private String toImageUrlsJson(List<String> urls) {
+        try {
+            List<String> cleanUrls = new ArrayList<>();
+
+            if (urls != null) {
+                for (String url : urls) {
+                    if (url == null || url.trim().isEmpty()) {
+                        continue;
+                    }
+
+                    cleanUrls.add(url.trim());
+
+                    if (cleanUrls.size() == 4) {
+                        break;
+                    }
+                }
+            }
+
+            return objectMapper.writeValueAsString(cleanUrls);
+        } catch (Exception e) {
+            throw new RuntimeException("Không xử lý được danh sách ảnh đánh giá");
+        }
+    }
+
+    /**
+     * Đọc JSON string từ DB thành List ảnh.
+     */
+    private List<String> parseImageUrls(String rawJson) {
+        try {
+            if (rawJson == null || rawJson.trim().isEmpty()) {
+                return new ArrayList<>();
+            }
+
+            return objectMapper.readValue(
+                    rawJson,
+                    new TypeReference<List<String>>() {
+                    }
+            );
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Làm sạch URL.
+     */
+    private String cleanUrl(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        return value.trim();
+    }
+
+    /**
+     * Làm sạch text.
+     */
     private String normalizeText(String value) {
         if (isBlank(value)) {
             return null;

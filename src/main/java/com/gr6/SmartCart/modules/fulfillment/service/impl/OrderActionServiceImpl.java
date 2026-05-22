@@ -21,6 +21,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import com.gr6.SmartCart.common.enums.SettlementStatus;
+import com.gr6.SmartCart.common.enums.WalletStatus;
+import com.gr6.SmartCart.common.enums.WalletTransactionType;
+import com.gr6.SmartCart.module_v3.withdraw.repository.SellerSettlementRepository;
+import com.gr6.SmartCart.module_v3.withdraw.repository.WithdrawWalletRepository;
+import com.gr6.SmartCart.module_v3.withdraw.repository.WithdrawWalletTransactionRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +37,12 @@ public class OrderActionServiceImpl implements OrderActionService {
     private final ProductVariantRepository variantRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private static final int PLATFORM_COMMISSION_PERCENT = 0;
+
+    private final SellerSettlementRepository settlementRepository;
+    private final WithdrawWalletRepository walletRepository;
+    private final WithdrawWalletTransactionRepository walletTransactionRepository;
+
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -255,7 +267,12 @@ public class OrderActionServiceImpl implements OrderActionService {
         handleSideEffects(shopOrder, newStatus, request.getCancelReason());
 
         shopOrder.setStatus(newStatus);
-        shopOrderRepository.save(shopOrder);
+        shopOrder = shopOrderRepository.save(shopOrder);
+
+// Nếu đơn shop chuyển sang COMPLETED thì tự cộng tiền vào ví seller
+        if (newStatus == OrderStatus.COMPLETED) {
+            settleCompletedShopOrder(shopOrder);
+        }
 
         syncParentOrderStatus(shopOrder.getOrder());
 
@@ -302,5 +319,85 @@ public class OrderActionServiceImpl implements OrderActionService {
 
         shopOrderRepository.save(shopOrder);
         return BaseResponse.successMessage( "Đã hủy đơn và hoàn trả số lượng vào kho thành công.");
+    }
+    /**
+     * Tự động đối soát và cộng tiền vào ví seller
+     * khi ShopOrder chuyển sang COMPLETED.
+     */
+    private void settleCompletedShopOrder(ShopOrder shopOrder) {
+        // Chỉ xử lý đơn đã hoàn thành
+        if (shopOrder.getStatus() != OrderStatus.COMPLETED) {
+            return;
+        }
+
+        // Nếu đơn này đã được đối soát rồi thì bỏ qua
+        // Tránh cộng tiền 2 lần vào ví seller
+        if (settlementRepository.existsByShopOrder_ShopOrderId(shopOrder.getShopOrderId())) {
+            return;
+        }
+
+        Shop shop = shopOrder.getShop();
+        User seller = shop.getUser();
+
+        // Tạo ví cho seller nếu seller chưa có ví
+        getOrCreateWallet(seller);
+
+        // Lấy ví seller và khóa ví để tránh lỗi cộng tiền đồng thời
+        Wallet lockedWallet = walletRepository.findByUserIdForUpdate(seller.getUserId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
+
+        // Tổng tiền của đơn shop
+        long gross = shopOrder.getTotalAmount() == null ? 0L : shopOrder.getTotalAmount();
+
+        // Hoa hồng sàn, hiện tại đang để 0%
+        long commission = gross * PLATFORM_COMMISSION_PERCENT / 100;
+
+        // Số tiền thực nhận của seller
+        long net = gross - commission;
+
+        // Cộng tiền vào ví seller
+        lockedWallet.setBalance(
+                (lockedWallet.getBalance() == null ? 0L : lockedWallet.getBalance()) + net
+        );
+        walletRepository.save(lockedWallet);
+
+        // Tạo bản ghi đối soát để đánh dấu đơn này đã cộng tiền
+        SellerSettlement settlement = SellerSettlement.builder()
+                .shopOrder(shopOrder)
+                .seller(seller)
+                .shop(shop)
+                .grossAmount(gross)
+                .commissionAmount(commission)
+                .netAmount(net)
+                .status(SettlementStatus.SETTLED)
+                .note("Tự động cộng tiền khi shopOrder #" + shopOrder.getShopOrderId() + " hoàn thành")
+                .settledBy("AUTO_SYSTEM")
+                .build();
+
+        settlementRepository.save(settlement);
+
+        // Tạo lịch sử giao dịch ví
+        WalletTransaction tx = new WalletTransaction();
+        tx.setWallet(lockedWallet);
+        tx.setType(WalletTransactionType.TOP_UP);
+        tx.setAmount(net);
+        tx.setDescription("Tự động cộng tiền từ shopOrder #" + shopOrder.getShopOrderId());
+
+        walletTransactionRepository.save(tx);
+    }
+
+    /**
+     * Lấy ví seller.
+     * Nếu seller chưa có ví thì tự động tạo ví mới.
+     */
+    private Wallet getOrCreateWallet(User seller) {
+        return walletRepository.findByUser_UserId(seller.getUserId())
+                .orElseGet(() -> {
+                    Wallet wallet = new Wallet();
+                    wallet.setUser(seller);
+                    wallet.setBalance(0L);
+                    wallet.setStatus(WalletStatus.ACTIVE);
+                    return walletRepository.save(wallet);
+                });
     }
 }

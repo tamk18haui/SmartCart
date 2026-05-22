@@ -1,5 +1,7 @@
 package com.gr6.SmartCart.modules.fulfillment.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Product;
 import com.gr6.SmartCart.common.domain.ProductOptionValue;
@@ -36,7 +38,21 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
     private final CatalogOrderItemRepository catalogOrderItemRepository;
+    private final ObjectMapper objectMapper;
 
+    /**
+     * Lấy chi tiết sản phẩm cho buyer.
+     *
+     * Bao gồm:
+     * - Thông tin sản phẩm
+     * - Shop
+     * - Biến thể
+     * - Option/phân loại
+     * - Tồn kho
+     * - Số lượng đã bán
+     * - Rating trung bình
+     * - Danh sách review có 4 ảnh + 1 video
+     */
     @Override
     @Transactional(readOnly = true)
     public BaseResponse<ProductDetailResponse> getProductDetail(Long productId) {
@@ -122,6 +138,11 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         return BaseResponse.success_data("Lấy chi tiết sản phẩm thành công", response);
     }
 
+    /**
+     * Chỉ cho xem sản phẩm đang ACTIVE,
+     * shop ACTIVE,
+     * category ACTIVE.
+     */
     private boolean isSellableProduct(Product product) {
         if (product == null || product.getStatus() != ProductStatus.ACTIVE) {
             return false;
@@ -135,6 +156,13 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 && product.getCategory().getCategoryStatus() == CategoryStatus.ACTIVE;
     }
 
+    /**
+     * Tạo danh sách nhóm phân loại từ các variant đang active.
+     *
+     * Ví dụ:
+     * - Màu sắc: Đen, Trắng
+     * - Size: M, L, XL
+     */
     private List<ProductDetailResponse.OptionGroupDTO> buildOptionGroupsFromActiveVariants(
             List<ProductVariant> activeVariants
     ) {
@@ -177,6 +205,13 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         return result;
     }
 
+    /**
+     * Map ProductVariant sang DTO.
+     *
+     * Lưu ý:
+     * Không được dùng biến review trong hàm này.
+     * Variant chỉ có imageUrl riêng của variant, không có imageUrls/videoUrl của review.
+     */
     private ProductDetailResponse.VariantDTO mapVariant(ProductVariant variant) {
         return ProductDetailResponse.VariantDTO.builder()
                 .variantId(variant.getVariantId())
@@ -190,6 +225,15 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .build();
     }
 
+    /**
+     * Build map thuộc tính của variant.
+     *
+     * Ví dụ:
+     * {
+     *   "Màu sắc": "Đen",
+     *   "Size": "XL"
+     * }
+     */
     private Map<String, String> buildVariantAttributes(ProductVariant variant) {
         Map<String, String> attrs = new LinkedHashMap<>();
 
@@ -217,12 +261,20 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         return attrs;
     }
 
+    /**
+     * Map Review entity sang ReviewDTO hiển thị ở chi tiết sản phẩm.
+     *
+     * Review mới hỗ trợ:
+     * - imageUrls: tối đa 4 ảnh, lưu DB dạng JSON string
+     * - videoUrl: 1 video
+     */
     private ProductDetailResponse.ReviewDTO mapReview(Review review) {
         return ProductDetailResponse.ReviewDTO.builder()
                 .reviewId(review.getReviewId())
                 .rating(review.getRating())
                 .comment(review.getComment())
-                .imageUrl(review.getImageUrl())
+                .imageUrls(parseReviewImageUrls(review.getImageUrls()))
+                .videoUrl(review.getVideoUrl())
                 .userName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng SmartCart")
                 .sellerReply(review.getSellerReply())
                 .createdAt(review.getCreatedAt())
@@ -230,6 +282,12 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .build();
     }
 
+    /**
+     * Tách chuỗi ảnh sản phẩm.
+     *
+     * Product.imageUrls hiện đang lưu dạng:
+     * url1,url2,url3
+     */
     private List<String> splitImageUrls(String imageUrls) {
         if (isBlank(imageUrls)) {
             return List.of();
@@ -241,6 +299,9 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Tính rating trung bình từ danh sách review.
+     */
     private double calculateAverageRating(List<Review> reviews) {
         if (reviews == null || reviews.isEmpty()) {
             return 0.0;
@@ -253,6 +314,31 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .mapToInt(Integer::intValue)
                 .average()
                 .orElse(0.0);
+    }
+
+    /**
+     * Đọc JSON string imageUrls từ Review.
+     *
+     * DB lưu:
+     * ["url1","url2","url3","url4"]
+     *
+     * API trả:
+     * List<String>
+     */
+    private List<String> parseReviewImageUrls(String rawJson) {
+        try {
+            if (rawJson == null || rawJson.trim().isEmpty()) {
+                return List.of();
+            }
+
+            return objectMapper.readValue(
+                    rawJson,
+                    new TypeReference<List<String>>() {
+                    }
+            );
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private int safeInteger(Integer value) {
