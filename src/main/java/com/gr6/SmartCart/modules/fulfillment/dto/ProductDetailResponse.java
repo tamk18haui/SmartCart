@@ -1,14 +1,19 @@
 package com.gr6.SmartCart.modules.fulfillment.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProductDetailResponse {
 
     private Long productId;
@@ -41,6 +46,8 @@ public class ProductDetailResponse {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class OptionGroupDTO {
         private String name;
         private List<String> values;
@@ -48,6 +55,8 @@ public class ProductDetailResponse {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class VariantDTO {
         private Long variantId;
         private String sku;
@@ -61,10 +70,16 @@ public class ProductDetailResponse {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ReviewDTO {
+        private Long reviewId;
         private Integer rating;
         private String comment;
         private String imageUrl;
         private String userName;
+        private String sellerReply;
+        private LocalDateTime createdAt;
+        private LocalDateTime repliedAt;
     }
 }

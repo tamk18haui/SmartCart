@@ -19,9 +19,17 @@ import java.util.Optional;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
-    Page<Product> findByShopShopIdAndStatusNot(Long shopId, ProductStatus status, Pageable pageable);
+    Page<Product> findByShopShopIdAndStatusNot(
+            Long shopId,
+            ProductStatus status,
+            Pageable pageable
+    );
 
-    Optional<Product> findByProductIdAndShopShopIdAndStatusNot(Long productId, Long shopId, ProductStatus status);
+    Optional<Product> findByProductIdAndShopShopIdAndStatusNot(
+            Long productId,
+            Long shopId,
+            ProductStatus status
+    );
 
     @EntityGraph(attributePaths = {"shop", "category", "variants"})
     @Query("SELECT p FROM Product p " +
@@ -71,7 +79,21 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("categoryStatus") CategoryStatus categoryStatus,
             Pageable pageable
     );
-    Long countByShop_ShopIdAndStatus(Long shopId, ProductStatus status);
+
+    @Query("SELECT DISTINCT p.brand FROM Product p " +
+            "WHERE p.brand IS NOT NULL " +
+            "AND TRIM(p.brand) <> '' " +
+            "AND (:keyword IS NULL OR :keyword = '' OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY p.brand ASC")
+    List<String> searchDistinctBrands(
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    Long countByShop_ShopIdAndStatus(
+            Long shopId,
+            ProductStatus status
+    );
 
     Page<Product> findByShop_ShopIdAndStatusOrderByProductIdDesc(
             Long shopId,
