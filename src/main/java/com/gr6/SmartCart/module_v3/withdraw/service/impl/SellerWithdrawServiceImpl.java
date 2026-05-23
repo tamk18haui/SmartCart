@@ -5,7 +5,6 @@ import com.gr6.SmartCart.common.base.PageResponse;
 import com.gr6.SmartCart.common.domain.*;
 import com.gr6.SmartCart.common.enums.*;
 import com.gr6.SmartCart.module_v3.withdraw.dto.*;
-
 import com.gr6.SmartCart.module_v3.withdraw.repository.*;
 import com.gr6.SmartCart.module_v3.withdraw.service.SellerWithdrawService;
 import com.gr6.SmartCart.modules.identity.repository.ShopRepository;
@@ -16,9 +15,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class SellerWithdrawServiceImpl implements SellerWithdrawService {
+
+    private static final int PLATFORM_COMMISSION_PERCENT = 0;
 
     private final UserRepository userRepository;
     private final ShopRepository shopRepository;
@@ -26,6 +29,7 @@ public class SellerWithdrawServiceImpl implements SellerWithdrawService {
     private final WithdrawWalletTransactionRepository walletTransactionRepository;
     private final WithdrawRequestRepository withdrawRequestRepository;
     private final SellerSettlementRepository settlementRepository;
+    private final WithdrawShopOrderRepository shopOrderRepository;
 
     @Override
     @Transactional
@@ -33,6 +37,11 @@ public class SellerWithdrawServiceImpl implements SellerWithdrawService {
         User seller = getCurrentSeller();
         Shop shop = getCurrentShop(seller);
         Wallet wallet = getOrCreateWallet(seller);
+
+        settleSellerPayableOrders(shop, seller);
+
+        wallet = walletRepository.findByUser_UserId(seller.getUserId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
 
         return BaseResponse.success_data(
                 "Lấy ví seller thành công",
@@ -71,7 +80,8 @@ public class SellerWithdrawServiceImpl implements SellerWithdrawService {
         User seller = getCurrentSeller();
         Shop shop = getCurrentShop(seller);
 
-        Wallet wallet = getOrCreateWallet(seller);
+        getOrCreateWallet(seller);
+        settleSellerPayableOrders(shop, seller);
 
         Wallet lockedWallet = walletRepository.findByUserIdForUpdate(seller.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
@@ -163,6 +173,62 @@ public class SellerWithdrawServiceImpl implements SellerWithdrawService {
                 "Lấy lịch sử đối soát thành công",
                 PageResponse.of(responsePage)
         );
+    }
+
+    private void settleSellerPayableOrders(Shop shop, User seller) {
+        List<ShopOrder> orders = shopOrderRepository.findSellerPayableUnsettledShopOrders(shop.getShopId());
+        if (orders == null || orders.isEmpty()) {
+            return;
+        }
+
+        Wallet lockedWallet = walletRepository.findByUserIdForUpdate(seller.getUserId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
+
+        if (lockedWallet.getStatus() == WalletStatus.LOCKED) {
+            throw new RuntimeException("Ví seller đang bị khóa");
+        }
+
+        long currentBalance = lockedWallet.getBalance() == null ? 0L : lockedWallet.getBalance();
+
+        for (ShopOrder shopOrder : orders) {
+            if (shopOrder == null || shopOrder.getShopOrderId() == null) {
+                continue;
+            }
+
+            if (settlementRepository.existsByShopOrder_ShopOrderId(shopOrder.getShopOrderId())) {
+                continue;
+            }
+
+            long gross = shopOrder.getTotalAmount() == null ? 0L : shopOrder.getTotalAmount();
+            long commission = gross * PLATFORM_COMMISSION_PERCENT / 100;
+            long net = gross - commission;
+
+            currentBalance += net;
+
+            SellerSettlement settlement = SellerSettlement.builder()
+                    .shopOrder(shopOrder)
+                    .seller(seller)
+                    .shop(shop)
+                    .grossAmount(gross)
+                    .commissionAmount(commission)
+                    .netAmount(net)
+                    .status(SettlementStatus.SETTLED)
+                    .note("Tự động cộng ví seller khi đơn đã giao/hoàn thành")
+                    .settledBy("SYSTEM")
+                    .build();
+
+            settlementRepository.save(settlement);
+
+            WalletTransaction tx = new WalletTransaction();
+            tx.setWallet(lockedWallet);
+            tx.setType(WalletTransactionType.TOP_UP);
+            tx.setAmount(net);
+            tx.setDescription("Thanh toán đơn #" + shopOrder.getShopOrderId());
+            walletTransactionRepository.save(tx);
+        }
+
+        lockedWallet.setBalance(currentBalance);
+        walletRepository.save(lockedWallet);
     }
 
     private Wallet getOrCreateWallet(User seller) {

@@ -11,6 +11,7 @@ import com.gr6.SmartCart.common.enums.ShopStatus;
 import com.gr6.SmartCart.common.enums.UserRole;
 import com.gr6.SmartCart.common.enums.UserStatus;
 import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.modules.catalog.dto.InventoryItemResponse;
 import com.gr6.SmartCart.modules.catalog.dto.InventoryUpdateRequest;
 import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
 import com.gr6.SmartCart.modules.catalog.service.InventoryService;
@@ -20,6 +21,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +44,25 @@ public class InventoryServiceImpl implements InventoryService {
             throw new RuntimeException("Tài khoản của bạn đã bị khóa, không thể thao tác tồn kho!");
         }
         return user;
+    }
+
+    private Shop getCurrentSellerShop() {
+        User user = getCurrentUser();
+
+        if (user.getRole() != UserRole.SELLER) {
+            throw new RuntimeException("Chỉ seller mới được xem/chỉnh tồn kho sản phẩm!");
+        }
+
+        Shop shop = user.getShop();
+        if (shop == null) {
+            throw new RuntimeException("Seller chưa có shop!");
+        }
+
+        if (shop.getStatus() != ShopStatus.ACTIVE) {
+            throw new RuntimeException("Shop chưa hoạt động hoặc đã bị khóa!");
+        }
+
+        return shop;
     }
 
     private void validateQuantity(Integer quantity) {
@@ -85,6 +107,54 @@ public class InventoryServiceImpl implements InventoryService {
         if (user.getShop() == null || !shop.getShopId().equals(user.getShop().getShopId())) {
             throw new RuntimeException("Bạn không có quyền chỉnh tồn kho biến thể này!");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BaseResponse<List<InventoryItemResponse>> getSellerInventory(String keyword, Integer lowStockThreshold) {
+        Shop shop = getCurrentSellerShop();
+        int threshold = lowStockThreshold == null ? 5 : Math.max(lowStockThreshold, 0);
+
+        List<InventoryItemResponse> data = productVariantRepository
+                .findSellerInventory(
+                        shop.getShopId(),
+                        keyword == null ? "" : keyword.trim(),
+                        VariantStatus.DELETED,
+                        ProductStatus.DELETED
+                )
+                .stream()
+                .filter(variant -> {
+                    Product product = variant.getProduct();
+                    return product != null
+                            && product.getStatus() != ProductStatus.BANNED
+                            && product.getStatus() != ProductStatus.DELETED;
+                })
+                .map(variant -> toInventoryItemResponse(variant, threshold))
+                .toList();
+
+        return BaseResponse.success_data("Lấy danh sách tồn kho seller thành công", data);
+    }
+
+    private InventoryItemResponse toInventoryItemResponse(ProductVariant variant, int threshold) {
+        Product product = variant.getProduct();
+        int stock = variant.getStockQuantity() == null ? 0 : variant.getStockQuantity();
+
+        String imageUrl = variant.getImageUrl();
+        if ((imageUrl == null || imageUrl.trim().isEmpty()) && product != null) {
+            imageUrl = product.getImageUrls();
+        }
+
+        return InventoryItemResponse.builder()
+                .productId(product == null ? null : product.getProductId())
+                .variantId(variant.getVariantId())
+                .productName(product == null ? "" : product.getName())
+                .sku(variant.getSku())
+                .variantName(variant.getSku())
+                .imageUrl(imageUrl)
+                .price(variant.getPrice())
+                .stockQuantity(stock)
+                .lowStock(stock <= threshold)
+                .build();
     }
 
     @Override

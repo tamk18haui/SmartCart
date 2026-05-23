@@ -14,9 +14,17 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderListResponse {
+
     private Long id;
-    private String orderCode; // Mã đơn hàng để hiển thị
+    private String orderCode;
     private BigDecimal totalAmount;
     private OrderStatus status;
     private LocalDateTime createdAt;
+
+    private String customerName;
+    private String receiverPhone;
+
+    private String firstProductName;
+    private String firstVariantName;
+    private String firstProductImage;
 }

@@ -11,19 +11,21 @@ import java.util.List;
 import java.util.Optional;
 
 public interface VoucherRepository extends JpaRepository<Voucher, Long> {
-    // Hàm 2: Đọc và Khóa (Dùng cho API Checkout - Chống Race Condition)
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT v FROM Voucher v WHERE v.code = :code")
 
-    // Lấy danh sách Voucher của 1 Shop
+    // Lấy danh sách voucher của 1 shop
     List<Voucher> findByShop_ShopId(Long shopId);
 
-
-    // Tìm chi tiết 1 Voucher cụ thể của 1 Shop
+    // Tìm voucher cụ thể của 1 shop
     Optional<Voucher> findByVoucherIdAndShop_ShopId(Long voucherId, Long shopId);
 
-    // Kiểm tra xem mã Code đã tồn tại trong Shop chưa (dùng khi tạo mới)
+    // Kiểm tra mã voucher trong 1 shop
     boolean existsByShop_ShopIdAndCode(Long shopId, String code);
+
+    // Kiểm tra mã voucher không phân biệt hoa thường trong 1 shop
+    boolean existsByShop_ShopIdAndCodeIgnoreCase(Long shopId, String code);
+
+    // Kiểm tra mã voucher toàn hệ thống
+    boolean existsByCodeIgnoreCase(String code);
 
     @Query("""
             SELECT v
@@ -55,6 +57,4 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long> {
                 v.discountValue DESC
             """)
     List<Voucher> findBuyerVouchersByShopId(@Param("shopId") Long shopId);
-
-    boolean existsByCodeIgnoreCase(String code);
 }
