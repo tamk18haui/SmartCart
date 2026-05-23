@@ -145,7 +145,11 @@ public class PaymentReturnController {
     }
     private boolean verifyVnpaySignature(Map<String, String> params) {
         if (vnpayHashSecret == null || vnpayHashSecret.trim().isEmpty()) {
-            return true;
+            return false;
+        }
+
+        if (params == null || params.isEmpty()) {
+            return false;
         }
 
         String secureHash = params.get("vnp_SecureHash");
@@ -159,11 +163,13 @@ public class PaymentReturnController {
         data.remove("vnp_SecureHashType");
 
         String hashData = PaymentCryptoUtil.buildQuery(data);
-        String calculated = PaymentCryptoUtil.hmacSHA512(hashData, vnpayHashSecret);
+        String calculated = PaymentCryptoUtil.hmacSHA512(
+                hashData,
+                vnpayHashSecret.trim()
+        );
 
-        return secureHash.equalsIgnoreCase(calculated);
+        return secureHash.trim().equalsIgnoreCase(calculated);
     }
-
     private Map<String, String> parseQueryLike(String raw) {
         Map<String, String> map = new HashMap<>();
 

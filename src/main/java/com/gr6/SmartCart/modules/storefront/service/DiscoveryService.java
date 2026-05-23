@@ -14,17 +14,15 @@ import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
 import com.gr6.SmartCart.modules.storefront.repository.StorefrontProductRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
@@ -39,7 +37,6 @@ public class DiscoveryService {
     @Autowired
     private CatalogOrderItemRepository catalogOrderItemRepository;
 
-    @Transactional (readOnly = true)
     public List<ProductResponseDTO> getHomeProducts() {
         Pageable pageable = PageRequest.of(0, 10);
 
@@ -52,11 +49,11 @@ public class DiscoveryService {
         );
 
         return products.stream()
+                .filter(Objects::nonNull)
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
 
-    @Transactional (readOnly = true)
     public Page<ProductResponseDTO> searchAndFilterProducts(
             SearchFilterRequest request,
             int page,
@@ -66,15 +63,22 @@ public class DiscoveryService {
             request = new SearchFilterRequest();
         }
 
-        String keyword = request.getKeyword() == null
-                ? ""
-                : request.getKeyword().trim();
-
+        String keyword = normalizeKeyword(request.getKeyword());
         Long categoryId = request.getCategoryId();
         BigDecimal minPrice = request.getMinPrice();
         BigDecimal maxPrice = request.getMaxPrice();
 
-        Pageable pageable = PageRequest.of(page, size);
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            BigDecimal temp = minPrice;
+            minPrice = maxPrice;
+            maxPrice = temp;
+        }
+
+        Pageable pageable = PageRequest.of(
+                normalizePage(page),
+                normalizeSize(size),
+                buildSort(request.getSortBy())
+        );
 
         Page<Product> productPage = productRepository.searchActiveProducts(
                 keyword,
@@ -118,7 +122,8 @@ public class DiscoveryService {
         dto.setMinPrice(minPrice);
         dto.setMaxPrice(maxPrice);
 
-        if (product.getBasePrice() != null && product.getBasePrice().compareTo(minPrice) > 0) {
+        if (product.getBasePrice() != null && minPrice != null
+                && product.getBasePrice().compareTo(minPrice) > 0) {
             dto.setOriginalPrice(product.getBasePrice());
         } else {
             dto.setOriginalPrice(null);
@@ -131,8 +136,13 @@ public class DiscoveryService {
                 List.of(OrderStatus.DELIVERED, OrderStatus.COMPLETED)
         );
 
-        Double averageRating = catalogReviewRepository.getAverageRatingByProductId(product.getProductId());
-        Integer reviewCount = catalogReviewRepository.getReviewCountByProductId(product.getProductId());
+        Double averageRating = catalogReviewRepository.getAverageRatingByProductId(
+                product.getProductId()
+        );
+
+        Integer reviewCount = catalogReviewRepository.getReviewCountByProductId(
+                product.getProductId()
+        );
 
         dto.setSoldQuantity(soldQuantity == null ? 0 : soldQuantity);
         dto.setAverageRating(averageRating == null ? 0.0 : averageRating);
@@ -149,63 +159,71 @@ public class DiscoveryService {
         return product.getVariants()
                 .stream()
                 .filter(Objects::nonNull)
-                .filter(variant -> variant.getStatus() == VariantStatus.ACTIVE)
+                .filter(v -> v.getStatus() == VariantStatus.ACTIVE)
+                .filter(v -> v.getStockQuantity() != null && v.getStockQuantity() > 0)
                 .collect(Collectors.toList());
     }
 
-    private BigDecimal getMinVariantPrice(Product product, List<ProductVariant> activeVariants) {
-        return activeVariants.stream()
-                .map(ProductVariant::getPrice)
-                .filter(Objects::nonNull)
-                .min(BigDecimal::compareTo)
-                .orElse(product.getBasePrice() == null ? BigDecimal.ZERO : product.getBasePrice());
+    private BigDecimal getMinVariantPrice(
+            Product product,
+            List<ProductVariant> activeVariants
+    ) {
+        if (activeVariants != null && !activeVariants.isEmpty()) {
+            return activeVariants.stream()
+                    .map(ProductVariant::getPrice)
+                    .filter(Objects::nonNull)
+                    .min(BigDecimal::compareTo)
+                    .orElse(product.getBasePrice());
+        }
+
+        return product.getBasePrice();
     }
 
-    private BigDecimal getMaxVariantPrice(Product product, List<ProductVariant> activeVariants) {
-        return activeVariants.stream()
-                .map(ProductVariant::getPrice)
-                .filter(Objects::nonNull)
-                .max(BigDecimal::compareTo)
-                .orElse(product.getBasePrice() == null ? BigDecimal.ZERO : product.getBasePrice());
+    private BigDecimal getMaxVariantPrice(
+            Product product,
+            List<ProductVariant> activeVariants
+    ) {
+        if (activeVariants != null && !activeVariants.isEmpty()) {
+            return activeVariants.stream()
+                    .map(ProductVariant::getPrice)
+                    .filter(Objects::nonNull)
+                    .max(BigDecimal::compareTo)
+                    .orElse(product.getBasePrice());
+        }
+
+        return product.getBasePrice();
     }
 
-    private String getDisplayImage(Product product, List<ProductVariant> activeVariants) {
+    private String getDisplayImage(
+            Product product,
+            List<ProductVariant> activeVariants
+    ) {
         if (activeVariants != null) {
             for (ProductVariant variant : activeVariants) {
-                if (Boolean.TRUE.equals(variant.getIsDefault())
-                        && !isBlank(variant.getImageUrl())) {
-                    return variant.getImageUrl().trim();
-                }
-            }
-
-            for (ProductVariant variant : activeVariants) {
-                if (!isBlank(variant.getImageUrl())) {
+                if (variant.getImageUrl() != null && !variant.getImageUrl().trim().isEmpty()) {
                     return variant.getImageUrl().trim();
                 }
             }
         }
 
-        return firstImage(product == null ? null : product.getImageUrls());
-    }
-
-    private String firstImage(String imageUrls) {
-        if (isBlank(imageUrls)) {
+        if (product.getImageUrls() == null || product.getImageUrls().trim().isEmpty()) {
             return null;
         }
 
-        return Arrays.stream(imageUrls.split(","))
+        return Arrays.stream(product.getImageUrls().split(","))
                 .map(String::trim)
-                .filter(value -> !value.isEmpty())
+                .filter(url -> !url.isEmpty())
                 .findFirst()
                 .orElse(null);
     }
 
     private String extractProvince(String pickupAddress) {
-        if (isBlank(pickupAddress)) {
-            return "Việt Nam";
+        if (pickupAddress == null || pickupAddress.trim().isEmpty()) {
+            return "";
         }
 
         String[] parts = pickupAddress.split(",");
+
         if (parts.length == 0) {
             return pickupAddress.trim();
         }
@@ -213,7 +231,40 @@ public class DiscoveryService {
         return parts[parts.length - 1].trim();
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) return "";
+        return keyword.trim();
+    }
+
+    private int normalizePage(int page) {
+        return Math.max(page, 0);
+    }
+
+    private int normalizeSize(int size) {
+        if (size <= 0) return 20;
+        return Math.min(size, 50);
+    }
+
+    private Sort buildSort(String sortBy) {
+        if (sortBy == null || sortBy.trim().isEmpty()) {
+            return Sort.by(Sort.Direction.DESC, "productId");
+        }
+
+        String value = sortBy.trim().toLowerCase();
+
+        switch (value) {
+            case "price_asc":
+                return Sort.by(Sort.Direction.ASC, "basePrice");
+
+            case "price_desc":
+                return Sort.by(Sort.Direction.DESC, "basePrice");
+
+            case "sold_desc":
+                return Sort.by(Sort.Direction.DESC, "soldCount");
+
+            case "newest":
+            default:
+                return Sort.by(Sort.Direction.DESC, "productId");
+        }
     }
 }

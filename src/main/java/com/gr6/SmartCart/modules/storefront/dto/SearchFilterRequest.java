@@ -10,4 +10,12 @@ public class SearchFilterRequest {
     private Long categoryId;
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
+
+    /*
+     * newest     : mới nhất
+     * price_asc  : giá tăng dần
+     * price_desc : giá giảm dần
+     * sold_desc  : bán chạy
+     */
+    private String sortBy;
 }
