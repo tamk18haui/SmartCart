@@ -185,6 +185,7 @@ public class SecurityFilterChainConfig {
                          * =========================
                          */
                         .requestMatchers("/api/v1/chat/**").authenticated()
+                        .requestMatchers("/api/v1/payments/**").permitAll()
                         .anyRequest().authenticated()
                 );
 

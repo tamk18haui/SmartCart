@@ -107,13 +107,24 @@ public class PaymentReturnController {
         String transactionStatus = params.get("vnp_TransactionStatus");
         String transactionNo = params.get("vnp_TransactionNo");
 
-        Long orderId = null;
-        Long transactionId = null;
+        if (txnRef == null || !txnRef.contains("-")) {
+            return BaseResponse.error(400, "Mã giao dịch VNPay không hợp lệ");
+        }
 
-        if (txnRef != null && txnRef.contains("-")) {
+        Long orderId;
+        Long transactionId;
+
+        try {
             String[] parts = txnRef.split("-");
+
+            if (parts.length < 2) {
+                return BaseResponse.error(400, "Mã giao dịch VNPay không hợp lệ");
+            }
+
             orderId = Long.parseLong(parts[0]);
             transactionId = Long.parseLong(parts[1]);
+        } catch (Exception e) {
+            return BaseResponse.error(400, "Không đọc được mã đơn hàng từ VNPay");
         }
 
         boolean success = "00".equals(responseCode) && "00".equals(transactionStatus);
@@ -122,13 +133,16 @@ public class PaymentReturnController {
         request.setOrderId(orderId);
         request.setTransactionId(transactionId);
         request.setPaymentProvider(PaymentProvider.VNPAY);
-        request.setProviderTransactionId(transactionNo == null ? txnRef : transactionNo);
+        request.setProviderTransactionId(
+                transactionNo == null || transactionNo.trim().isEmpty()
+                        ? txnRef
+                        : transactionNo
+        );
         request.setSuccess(success);
         request.setSignature("VNPAY_TEST_CALLBACK");
 
         return orderService.handlePaymentCallback(request);
     }
-
     private boolean verifyVnpaySignature(Map<String, String> params) {
         if (vnpayHashSecret == null || vnpayHashSecret.trim().isEmpty()) {
             return true;
