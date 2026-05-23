@@ -91,7 +91,6 @@ public class PaymentReturnController {
         BaseResponse<?> response = processVnpay(params);
         return htmlResult(Boolean.TRUE.equals(isSuccessResponse(response)), "VNPay", response.getMessage());
     }
-
     @GetMapping("/vnpay/ipn")
     public BaseResponse<?> vnpayIpn(@RequestParam Map<String, String> params) {
         if (!verifyVnpaySignature(params)) {
@@ -145,28 +144,40 @@ public class PaymentReturnController {
     }
     private boolean verifyVnpaySignature(Map<String, String> params) {
         if (vnpayHashSecret == null || vnpayHashSecret.trim().isEmpty()) {
+            System.out.println("VNPAY VERIFY ERROR: Hash secret is empty");
             return false;
         }
 
         if (params == null || params.isEmpty()) {
+            System.out.println("VNPAY VERIFY ERROR: Params is empty");
             return false;
         }
 
         String secureHash = params.get("vnp_SecureHash");
 
         if (secureHash == null || secureHash.trim().isEmpty()) {
+            System.out.println("VNPAY VERIFY ERROR: vnp_SecureHash is empty");
             return false;
         }
 
-        Map<String, String> data = new HashMap<>(params);
+        Map<String, String> data = new java.util.HashMap<>(params);
         data.remove("vnp_SecureHash");
         data.remove("vnp_SecureHashType");
 
         String hashData = PaymentCryptoUtil.buildQuery(data);
+
         String calculated = PaymentCryptoUtil.hmacSHA512(
                 hashData,
                 vnpayHashSecret.trim()
         );
+
+        System.out.println("========== VNPAY VERIFY DEBUG ==========");
+        System.out.println("HASH_SECRET_LENGTH = " + vnpayHashSecret.trim().length());
+        System.out.println("HASH_DATA_RETURN = " + hashData);
+        System.out.println("SECURE_HASH_RETURN = " + secureHash);
+        System.out.println("SECURE_HASH_CALCULATED = " + calculated);
+        System.out.println("VALID = " + secureHash.trim().equalsIgnoreCase(calculated));
+        System.out.println("========================================");
 
         return secureHash.trim().equalsIgnoreCase(calculated);
     }
