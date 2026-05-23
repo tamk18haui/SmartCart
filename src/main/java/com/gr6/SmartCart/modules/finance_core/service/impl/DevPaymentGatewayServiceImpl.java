@@ -225,12 +225,20 @@ public class DevPaymentGatewayServiceImpl implements PaymentGatewayService {
         params.put("vnp_ExpireDate", expireDate);
 
         String query = PaymentCryptoUtil.buildQuery(params);
-        String secureHash = PaymentCryptoUtil.hmacSHA512(query, vnpayHashSecret.trim());
+        String secureHash = PaymentCryptoUtil.hmacSHA512(
+                query,
+                vnpayHashSecret.trim()
+        );
 
-        String paymentUrl = vnpayUrl + "?" + query + "&vnp_SecureHash=" + secureHash;
+        String paymentUrl = vnpayUrl.trim()
+                + "?"
+                + query
+                + "&vnp_SecureHash="
+                + secureHash;
 
         return PaymentCreateResult.builder()
                 .paymentUrl(paymentUrl)
                 .providerTransactionId(txnRef)
                 .build();
-    }}
+    }
+}
