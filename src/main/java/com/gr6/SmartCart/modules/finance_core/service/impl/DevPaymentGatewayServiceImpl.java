@@ -170,39 +170,71 @@ public class DevPaymentGatewayServiceImpl implements PaymentGatewayService {
             throw new RuntimeException("Chưa cấu hình payment.vnpay.hash-secret");
         }
 
+        if (order == null || order.getOrderId() == null) {
+            throw new RuntimeException("Đơn hàng không hợp lệ");
+        }
+
+        if (transaction == null || transaction.getTransactionId() == null) {
+            throw new RuntimeException("Giao dịch không hợp lệ");
+        }
+
+        Long amount = transaction.getAmount();
+
+        if (amount == null || amount <= 0) {
+            throw new RuntimeException("Số tiền thanh toán không hợp lệ");
+        }
+
         String txnRef = order.getOrderId() + "-" + transaction.getTransactionId();
 
-        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        TimeZone vnTimeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh");
+        Calendar calendar = Calendar.getInstance(vnTimeZone);
+
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
-        formatter.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        formatter.setTimeZone(vnTimeZone);
 
         String createDate = formatter.format(calendar.getTime());
 
         calendar.add(Calendar.MINUTE, 15);
         String expireDate = formatter.format(calendar.getTime());
 
+        String baseUrl = publicBaseUrl;
+
+        if (baseUrl == null || baseUrl.trim().isEmpty()) {
+            baseUrl = "https://smartcartgr6.up.railway.app";
+        }
+
+        baseUrl = baseUrl.trim();
+
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+
         Map<String, String> params = new HashMap<>();
         params.put("vnp_Version", "2.1.0");
         params.put("vnp_Command", "pay");
-        params.put("vnp_TmnCode", vnpayTmnCode);
-
-        // Đảm bảo số nhân với 100 là số nguyên
-        params.put("vnp_Amount", String.valueOf((long) (transaction.getAmount() * 100)));
-
+        params.put("vnp_TmnCode", vnpayTmnCode.trim());
+        params.put("vnp_Amount", String.valueOf(amount * 100));
         params.put("vnp_CurrCode", "VND");
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toan don hang SmartCart #" + order.getOrderId());
+        params.put("vnp_OrderInfo", "Thanh toan don hang SmartCart " + order.getOrderId());
         params.put("vnp_OrderType", "other");
         params.put("vnp_Locale", "vn");
-        params.put("vnp_ReturnUrl", publicBaseUrl + "/api/v1/payments/vnpay/return");
-        params.put("vnp_IpAddr", "127.0.0.1"); // Trong thực tế, nên lấy IP thực của client
+        params.put("vnp_ReturnUrl", baseUrl + "/api/v1/payments/vnpay/return");
+        params.put("vnp_IpAddr", "127.0.0.1");
         params.put("vnp_CreateDate", createDate);
         params.put("vnp_ExpireDate", expireDate);
 
         String query = PaymentCryptoUtil.buildQuery(params);
-        String secureHash = PaymentCryptoUtil.hmacSHA512(query, vnpayHashSecret);
+        String secureHash = PaymentCryptoUtil.hmacSHA512(
+                query,
+                vnpayHashSecret.trim()
+        );
 
-        String paymentUrl = vnpayUrl + "?" + query + "&vnp_SecureHash=" + secureHash;
+        String paymentUrl = vnpayUrl.trim()
+                + "?"
+                + query
+                + "&vnp_SecureHash="
+                + secureHash;
 
         return PaymentCreateResult.builder()
                 .paymentUrl(paymentUrl)

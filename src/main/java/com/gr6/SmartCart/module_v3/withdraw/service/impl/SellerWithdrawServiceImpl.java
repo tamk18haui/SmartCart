@@ -36,11 +36,11 @@ public class SellerWithdrawServiceImpl implements SellerWithdrawService {
     public BaseResponse<WalletSummaryResponse> getMyWallet() {
         User seller = getCurrentSeller();
         Shop shop = getCurrentShop(seller);
-        Wallet wallet = getOrCreateWallet(seller);
 
+        getOrCreateWallet(seller);
         settleSellerPayableOrders(shop, seller);
 
-        wallet = walletRepository.findByUser_UserId(seller.getUserId())
+        Wallet wallet = walletRepository.findByUser_UserId(seller.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
 
         return BaseResponse.success_data(

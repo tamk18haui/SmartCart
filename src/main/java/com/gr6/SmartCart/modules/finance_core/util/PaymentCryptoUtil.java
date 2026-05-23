@@ -24,20 +24,24 @@ public class PaymentCryptoUtil {
     private static String hmac(String data, String key, String algorithm) {
         try {
             Mac mac = Mac.getInstance(algorithm);
+
             SecretKeySpec secretKeySpec = new SecretKeySpec(
                     key.getBytes(StandardCharsets.UTF_8),
                     algorithm
             );
+
             mac.init(secretKeySpec);
 
             byte[] bytes = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder hash = new StringBuilder();
+
             for (byte b : bytes) {
                 hash.append(String.format("%02x", b));
             }
 
             return hash.toString();
+
         } catch (Exception e) {
             throw new RuntimeException("Không tạo được chữ ký thanh toán");
         }
@@ -45,21 +49,22 @@ public class PaymentCryptoUtil {
 
     public static String urlEncode(String value) {
         if (value == null) return "";
-        return URLEncoder.encode(value, StandardCharsets.UTF_8)
-                .replace("+", "%20");
+
+        /*
+         * Quan trọng:
+         * Không replace "+" thành "%20".
+         * URLEncoder mặc định encode dấu cách thành "+".
+         * VNPay callback verify rất nhạy với khác biệt encode.
+         */
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     public static String buildQuery(Map<String, String> params) {
-        return new TreeMap<>(params).entrySet()
+        return new TreeMap<>(params)
+                .entrySet()
                 .stream()
+                .filter(e -> e.getValue() != null && !e.getValue().trim().isEmpty())
                 .map(e -> urlEncode(e.getKey()) + "=" + urlEncode(e.getValue()))
-                .collect(Collectors.joining("&"));
-    }
-
-    public static String buildRawData(Map<String, String> params) {
-        return new TreeMap<>(params).entrySet()
-                .stream()
-                .map(e -> e.getKey() + "=" + e.getValue())
                 .collect(Collectors.joining("&"));
     }
 }

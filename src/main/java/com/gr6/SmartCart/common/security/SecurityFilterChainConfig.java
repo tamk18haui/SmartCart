@@ -72,6 +72,7 @@ public class SecurityFilterChainConfig {
                                 // Chi tiết sản phẩm public
                                 "/api/v1/fulfillment/product/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/fulfillment/product/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/vouchers/shop/**").permitAll()
 
                         /*
@@ -184,7 +185,9 @@ public class SecurityFilterChainConfig {
                          * DEFAULT
                          * =========================
                          */
+                        .requestMatchers("/api/v1/storefront/discovery/**").permitAll()
                         .requestMatchers("/api/v1/chat/**").authenticated()
+                        .requestMatchers("/api/v1/payments/**").permitAll()
                         .anyRequest().authenticated()
                 );
 

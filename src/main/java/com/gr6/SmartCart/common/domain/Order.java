@@ -64,7 +64,4 @@ public class Order {
 
     @OneToOne(mappedBy = "order")
     private Transaction transaction;
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
-    private List<Review> reviews;
 }

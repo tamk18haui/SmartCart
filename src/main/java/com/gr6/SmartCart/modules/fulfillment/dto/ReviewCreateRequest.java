@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ReviewCreateRequest {
 
@@ -20,5 +22,9 @@ public class ReviewCreateRequest {
     @Size(max = 2000, message = "Nội dung nhận xét không được vượt quá 2000 ký tự")
     private String comment;
 
-    private String imageUrl;
+    // Tối đa 4 ảnh
+    private List<String> imageUrls;
+
+    // Tối đa 1 video
+    private String videoUrl;
 }
