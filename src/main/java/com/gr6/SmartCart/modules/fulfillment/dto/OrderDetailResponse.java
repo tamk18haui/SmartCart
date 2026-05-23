@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -14,15 +15,22 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderDetailResponse {
-    private Long id;
-    private OrderStatus status;
-    private BigDecimal totalAmount;
 
-    // Thông tin người nhận (Từ bảng Addresses)
+    private Long id;
+    private String orderCode;
+    private OrderStatus status;
+    private LocalDateTime createdAt;
+
+    private BigDecimal totalAmount;
+    private BigDecimal subtotalAmount;
+    private BigDecimal shippingFee;
+
+    private Long buyerId;
+    private String buyerName;
+
     private String receiverName;
     private String receiverPhone;
     private String shippingAddress;
 
-    // Danh sách sản phẩm (Từ bảng Order_Items)
     private List<OrderItemDTO> items;
 }

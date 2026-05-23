@@ -25,9 +25,10 @@ public class ProductController {
 
     @GetMapping("/brands")
     public BaseResponse<List<String>> getBrandSuggestions(
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId
     ) {
-        return productService.getBrandSuggestions(keyword);
+        return productService.getBrandSuggestions(keyword, categoryId);
     }
 
     @GetMapping("/shop/{shopId}")
@@ -50,6 +51,14 @@ public class ProductController {
             @Valid @RequestBody ProductRequest request
     ) {
         return productService.updateProduct(productId, request);
+    }
+
+    @PatchMapping("/{productId}/visibility")
+    public BaseResponse<ProductResponse> toggleProductVisibility(
+            @PathVariable Long productId,
+            @RequestParam boolean hidden
+    ) {
+        return productService.toggleProductVisibility(productId, hidden);
     }
 
     @DeleteMapping("/{productId}")

@@ -196,6 +196,39 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
+    public BaseResponse<ProductResponse> toggleProductVisibility(Long productId, boolean hidden) {
+        Shop shop = getCurrentActiveShop();
+
+        Product product = productRepository
+                .findByProductIdAndShopShopIdAndStatusNot(
+                        productId,
+                        shop.getShopId(),
+                        ProductStatus.DELETED
+                )
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền sửa!"));
+
+        if (product.getStatus() == ProductStatus.BANNED) {
+            throw new RuntimeException("Sản phẩm đang bị admin khóa, seller không thể tạm ẩn/hiển thị!");
+        }
+
+        product.setStatus(hidden ? ProductStatus.HIDDEN : ProductStatus.ACTIVE);
+
+        /*
+         * Tạm ẩn sản phẩm chỉ cần đổi trạng thái của Product.
+         * Không đổi trạng thái ProductVariant để tránh lỗi 500 ở các DB cũ
+         * hoặc dữ liệu biến thể đang liên kết với đơn hàng/tồn kho.
+         * Buyer đã được lọc theo ProductStatus.ACTIVE nên HIDDEN sẽ không hiển thị.
+         */
+        Product savedProduct = productRepository.saveAndFlush(product);
+
+        return BaseResponse.success_data(
+                hidden ? "Đã tạm ẩn sản phẩm" : "Đã hiển thị lại sản phẩm",
+                ProductResponse.fromEntity(savedProduct)
+        );
+    }
+
+    @Override
+    @Transactional
     public BaseResponse<String> deleteProduct(Long productId) {
         Shop shop = getCurrentActiveShop();
 
@@ -224,9 +257,10 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public BaseResponse<List<String>> getBrandSuggestions(String keyword) {
+    public BaseResponse<List<String>> getBrandSuggestions(String keyword, Long categoryId) {
         List<String> brands = productRepository.searchDistinctBrands(
                 normalizeKeyword(keyword),
+                categoryId,
                 PageRequest.of(0, MAX_BRAND_SUGGESTIONS)
         );
 

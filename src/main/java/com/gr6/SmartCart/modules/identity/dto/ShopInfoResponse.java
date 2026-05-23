@@ -15,4 +15,6 @@ public class ShopInfoResponse {
     private String pickupAddress;
     private String description;
     private String status;
+    private String logoUrl;
+    private String coverUrl;
 }

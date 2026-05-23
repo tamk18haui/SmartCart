@@ -12,8 +12,12 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderItemDTO {
+
     private String productName;
-    private String variantName; // Phân loại (vd: Màu đỏ, XL)
+    private String variantName;
     private int quantity;
     private BigDecimal price;
+
+    // Ảnh sản phẩm/biến thể để Android seller order load lên
+    private String imageUrl;
 }

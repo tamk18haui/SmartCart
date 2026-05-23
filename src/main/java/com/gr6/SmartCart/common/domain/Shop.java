@@ -7,11 +7,13 @@ import lombok.Setter;
 
 import java.util.List;
 
-@Entity @Table(name = "Shops")
+@Entity
+@Table(name = "Shops")
 @Getter
 @Setter
 public class Shop {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long shopId;
 
     @Column(nullable = false, length = 150)
@@ -23,10 +25,18 @@ public class Shop {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String pickupAddress;
 
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 50)
+    @Column(length = 500)
+    private String logoUrl;
+
+    @Column(length = 500)
+    private String coverUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
     private ShopStatus status;
 
-    @OneToOne @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @OneToOne
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
     @OneToMany(mappedBy = "shop")

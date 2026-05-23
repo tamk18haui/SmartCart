@@ -83,10 +83,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT DISTINCT p.brand FROM Product p " +
             "WHERE p.brand IS NOT NULL " +
             "AND TRIM(p.brand) <> '' " +
+            "AND (:categoryId IS NULL OR p.category.categoryId = :categoryId) " +
             "AND (:keyword IS NULL OR :keyword = '' OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
             "ORDER BY p.brand ASC")
     List<String> searchDistinctBrands(
             @Param("keyword") String keyword,
+            @Param("categoryId") Long categoryId,
             Pageable pageable
     );
 

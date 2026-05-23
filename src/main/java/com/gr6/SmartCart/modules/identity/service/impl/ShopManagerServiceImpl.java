@@ -25,26 +25,20 @@ public class ShopManagerServiceImpl implements ShopManagerService {
     @Override
     @Transactional
     public BaseResponse updateShop(ShopManagerRequest request) {
-        // 1. Lấy thông tin xác thực từ SecurityContext (được nạp bởi JwtFilter)
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
             return BaseResponse.error(401, "Bạn cần đăng nhập để thực hiện thao tác này!");
         }
 
-        // 2. Lấy Email từ Token
         String currentEmail = authentication.getName();
 
-        // 3. Tìm User và Shop liên kết
         User user = userRepository.findByEmail(currentEmail)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin người dùng!"));
 
-        Shop shop = user.getShop();
-        if (shop == null) {
-            return BaseResponse.error(404, "Tài khoản của bạn chưa liên kết với cửa hàng nào!");
-        }
+        Shop shop = shopRepository.findByUser_UserId(user.getUserId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin cửa hàng!"));
 
-        // 4. Kiểm tra các trạng thái logic (Sát với Use Case và Enum của bạn)
         if (shop.getStatus() == ShopStatus.PENDING) {
             return BaseResponse.error(400, "Cửa hàng đang chờ duyệt, không thể thay đổi thông tin!");
         }
@@ -57,38 +51,60 @@ public class ShopManagerServiceImpl implements ShopManagerService {
             return BaseResponse.error(403, "Cửa hàng đã bị khóa, bạn không có quyền chỉnh sửa!");
         }
 
-        // 5. Cập nhật thông tin từ DTO vào Entity
-        shop.setShopName(request.getShopName());
-        shop.setPickupAddress(request.getPickupAddress());
-        shop.setDescription(request.getDescription());
+        shop.setShopName(request.getShopName().trim());
+        shop.setPickupAddress(request.getPickupAddress().trim());
+        shop.setDescription(trimToNull(request.getDescription()));
 
-        // 6. Lưu lại vào CSDL
+        if (request.getLogoUrl() != null) {
+            shop.setLogoUrl(trimToNull(request.getLogoUrl()));
+        }
+
+        if (request.getCoverUrl() != null) {
+            shop.setCoverUrl(trimToNull(request.getCoverUrl()));
+        }
+
         shopRepository.save(shop);
 
-        return BaseResponse.successMessage( "Cập nhật thông tin cửa hàng thành công!");
+        return BaseResponse.successMessage("Cập nhật thông tin cửa hàng thành công!");
     }
+
     @Override
-    @Transactional(readOnly = true) // Giữ kết nối mở lâu hơn một chút [cite: 162, 187]
+    @Transactional(readOnly = true)
     public BaseResponse getShopInfo() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return BaseResponse.error(401, "Bạn cần đăng nhập để xem thông tin cửa hàng!");
+        }
+
         String email = authentication.getName();
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Thay vì return user.getShop(), hãy dùng Repository tìm trực tiếp [cite: 132, 186]
         Shop shop = shopRepository.findByUser_UserId(user.getUserId())
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
-        // Chuyển từ Entity sang DTO để trả về [cite: 199]
-        ShopInfoResponse response = ShopInfoResponse.builder()
+        return BaseResponse.success(mapToResponse(shop));
+    }
+
+    private ShopInfoResponse mapToResponse(Shop shop) {
+        return ShopInfoResponse.builder()
                 .shopId(shop.getShopId())
                 .shopName(shop.getShopName())
                 .pickupAddress(shop.getPickupAddress())
                 .description(shop.getDescription())
-                .status(shop.getStatus().name())
+                .status(shop.getStatus() == null ? null : shop.getStatus().name())
+                .logoUrl(shop.getLogoUrl())
+                .coverUrl(shop.getCoverUrl())
                 .build();
+    }
 
-        return BaseResponse.success(response);
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

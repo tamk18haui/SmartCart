@@ -1,7 +1,6 @@
 package com.gr6.SmartCart.modules.identity.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
@@ -13,4 +12,6 @@ public class ShopManagerRequest {
     private String pickupAddress;
 
     private String description;
+    private String logoUrl;
+    private String coverUrl;
 }

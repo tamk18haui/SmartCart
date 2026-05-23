@@ -17,7 +17,9 @@ public interface ProductService {
 
     BaseResponse<ProductResponse> updateProduct(Long productId, ProductRequest request);
 
+    BaseResponse<ProductResponse> toggleProductVisibility(Long productId, boolean hidden);
+
     BaseResponse<ProductResponse> getProductForSeller(Long productId);
 
-    BaseResponse<List<String>> getBrandSuggestions(String keyword);
+    BaseResponse<List<String>> getBrandSuggestions(String keyword, Long categoryId);
 }
