@@ -41,6 +41,7 @@ public class PaymentCryptoUtil {
             }
 
             return hash.toString();
+
         } catch (Exception e) {
             throw new RuntimeException("Không tạo được chữ ký thanh toán");
         }
@@ -49,9 +50,12 @@ public class PaymentCryptoUtil {
     public static String urlEncode(String value) {
         if (value == null) return "";
 
-        // QUAN TRỌNG:
-        // Không replace "+" thành "%20".
-        // VNPay hash data dùng chuẩn URLEncoder, dấu cách là "+".
+        /*
+         * Quan trọng:
+         * Không replace "+" thành "%20".
+         * URLEncoder mặc định encode dấu cách thành "+".
+         * VNPay callback verify rất nhạy với khác biệt encode.
+         */
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
@@ -61,15 +65,6 @@ public class PaymentCryptoUtil {
                 .stream()
                 .filter(e -> e.getValue() != null && !e.getValue().trim().isEmpty())
                 .map(e -> urlEncode(e.getKey()) + "=" + urlEncode(e.getValue()))
-                .collect(Collectors.joining("&"));
-    }
-
-    public static String buildRawData(Map<String, String> params) {
-        return new TreeMap<>(params)
-                .entrySet()
-                .stream()
-                .filter(e -> e.getValue() != null && !e.getValue().trim().isEmpty())
-                .map(e -> e.getKey() + "=" + e.getValue())
                 .collect(Collectors.joining("&"));
     }
 }
