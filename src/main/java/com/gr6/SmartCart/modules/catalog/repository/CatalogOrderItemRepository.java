@@ -33,4 +33,17 @@ public interface CatalogOrderItemRepository extends JpaRepository<OrderItem, Lon
             @Param("productId") Long productId,
             @Param("statuses") List<OrderStatus> statuses
     );
+    @Query("""
+            SELECT COALESCE(SUM(oi.quantity * oi.priceAtPurchase), 0)
+            FROM OrderItem oi
+            WHERE oi.variant.product.productId = :productId
+              AND oi.shopOrder.status IN :statuses
+            """)
+    Long getRevenueByProductId(
+            @Param("productId") Long productId,
+            @Param("statuses") List<OrderStatus> statuses
+    );
+
 }
+
+

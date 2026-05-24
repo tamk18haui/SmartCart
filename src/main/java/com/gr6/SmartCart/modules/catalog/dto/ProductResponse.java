@@ -28,7 +28,9 @@ public class ProductResponse {
     private List<String> images;
     private List<VariantResponse> variants;
     private Double averageRating;
+    private Integer reviewCount;
     private Integer soldQuantity;
+    private Long totalRevenue;
 
     public static ProductResponse fromEntity(Product product) {
         ProductResponse response = new ProductResponse();
@@ -79,8 +81,12 @@ public class ProductResponse {
         }
 
         response.setAverageRating(0.0);
+        response.setReviewCount(0);
         response.setSoldQuantity(0);
+        response.setTotalRevenue(0L);
 
         return response;
     }
 }
+
+

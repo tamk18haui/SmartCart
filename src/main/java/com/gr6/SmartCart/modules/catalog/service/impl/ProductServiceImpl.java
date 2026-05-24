@@ -11,12 +11,15 @@ import com.gr6.SmartCart.common.domain.Shop;
 import com.gr6.SmartCart.common.domain.User;
 import com.gr6.SmartCart.common.domain.VariantOptionValue;
 import com.gr6.SmartCart.common.enums.CategoryStatus;
+import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.ShopStatus;
 import com.gr6.SmartCart.common.enums.VariantStatus;
 import com.gr6.SmartCart.modules.catalog.dto.ProductRequest;
 import com.gr6.SmartCart.modules.catalog.dto.ProductResponse;
 import com.gr6.SmartCart.modules.catalog.dto.ProductVariantRequest;
+import com.gr6.SmartCart.modules.catalog.repository.CatalogOrderItemRepository;
+import com.gr6.SmartCart.modules.catalog.repository.CatalogReviewRepository;
 import com.gr6.SmartCart.modules.catalog.repository.CategoryRepository;
 import com.gr6.SmartCart.modules.catalog.repository.ProductOptionRepository;
 import com.gr6.SmartCart.modules.catalog.repository.ProductOptionValueRepository;
@@ -49,6 +52,10 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private static final int MAX_BRAND_SUGGESTIONS = 30;
+    private static final List<OrderStatus> PRODUCT_SALES_STATUSES = List.of(
+            OrderStatus.DELIVERED,
+            OrderStatus.COMPLETED
+    );
 
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
@@ -57,6 +64,8 @@ public class ProductServiceImpl implements ProductService {
     private final VariantOptionValueRepository variantOptionValueRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final CatalogReviewRepository catalogReviewRepository;
+    private final CatalogOrderItemRepository catalogOrderItemRepository;
 
     @Override
     @Transactional
@@ -113,7 +122,7 @@ public class ProductServiceImpl implements ProductService {
 
         return BaseResponse.success_data(
                 "Tạo sản phẩm thành công",
-                ProductResponse.fromEntity(result)
+                toProductResponse(result)
         );
     }
 
@@ -126,7 +135,7 @@ public class ProductServiceImpl implements ProductService {
                 PageRequest.of(Math.max(page - 1, 0), normalizeSize(size))
         );
 
-        Page<ProductResponse> responsePage = products.map(ProductResponse::fromEntity);
+        Page<ProductResponse> responsePage = products.map(this::toProductResponse);
 
         return BaseResponse.success(PageResponse.of(responsePage));
     }
@@ -144,7 +153,7 @@ public class ProductServiceImpl implements ProductService {
                 )
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm hoặc bạn không có quyền xem!"));
 
-        return BaseResponse.success(ProductResponse.fromEntity(product));
+        return BaseResponse.success(toProductResponse(product));
     }
 
     @Override
@@ -190,7 +199,7 @@ public class ProductServiceImpl implements ProductService {
 
         return BaseResponse.success_data(
                 "Cập nhật sản phẩm thành công",
-                ProductResponse.fromEntity(savedProduct)
+                toProductResponse(savedProduct)
         );
     }
 
@@ -223,7 +232,7 @@ public class ProductServiceImpl implements ProductService {
 
         return BaseResponse.success_data(
                 hidden ? "Đã tạm ẩn sản phẩm" : "Đã hiển thị lại sản phẩm",
-                ProductResponse.fromEntity(savedProduct)
+                toProductResponse(savedProduct)
         );
     }
 
@@ -265,6 +274,37 @@ public class ProductServiceImpl implements ProductService {
         );
 
         return BaseResponse.success_data("Lấy danh sách thương hiệu thành công", brands);
+    }
+
+    private ProductResponse toProductResponse(Product product) {
+        ProductResponse response = ProductResponse.fromEntity(product);
+
+        Long productId = product == null ? null : product.getProductId();
+        if (productId == null) {
+            response.setAverageRating(0.0);
+            response.setReviewCount(0);
+            response.setSoldQuantity(0);
+            response.setTotalRevenue(0L);
+            return response;
+        }
+
+        Double averageRating = catalogReviewRepository.getAverageRatingByProductId(productId);
+        Integer reviewCount = catalogReviewRepository.getReviewCountByProductId(productId);
+        Integer soldQuantity = catalogOrderItemRepository.getSoldQuantityByProductId(
+                productId,
+                PRODUCT_SALES_STATUSES
+        );
+        Long totalRevenue = catalogOrderItemRepository.getRevenueByProductId(
+                productId,
+                PRODUCT_SALES_STATUSES
+        );
+
+        response.setAverageRating(averageRating == null ? 0.0 : averageRating);
+        response.setReviewCount(reviewCount == null ? 0 : reviewCount);
+        response.setSoldQuantity(soldQuantity == null ? 0 : soldQuantity);
+        response.setTotalRevenue(totalRevenue == null ? 0L : totalRevenue);
+
+        return response;
     }
 
     private Shop getCurrentActiveShop() {
@@ -497,3 +537,5 @@ public class ProductServiceImpl implements ProductService {
         return normalized.replaceAll("\\p{M}", "");
     }
 }
+
+
