@@ -4,6 +4,7 @@ import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.module_v2.order_v2.dto.OrderHistoryResponse;
 import com.gr6.SmartCart.module_v2.order_v2.dto.OrderTrackingResponse;
 import com.gr6.SmartCart.module_v2.order_v2.service.TrackingService;
+import com.gr6.SmartCart.modules.finance_core.dto.CheckoutOrderResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,5 +25,15 @@ public class TrackingController {
     @GetMapping("/{shopOrderId}")
     public BaseResponse<OrderTrackingResponse> trackOrder(@PathVariable Long shopOrderId) {
         return trackingService.trackOrder(shopOrderId);
+    }
+
+    @PostMapping("/{shopOrderId}/complete")
+    public BaseResponse<String> completeBuyerOrder(@PathVariable Long shopOrderId) {
+        return trackingService.completeBuyerOrder(shopOrderId);
+    }
+
+    @PostMapping("/{shopOrderId}/repay")
+    public BaseResponse<CheckoutOrderResponse> retryPayment(@PathVariable Long shopOrderId) {
+        return trackingService.retryPayment(shopOrderId);
     }
 }

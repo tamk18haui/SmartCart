@@ -11,7 +11,9 @@ import java.util.List;
 @Data
 @Builder
 public class OrderTrackingResponse {
+
     private Long shopOrderId;
+    private Long shopId;
     private String shopName;
     private OrderStatus status;
 
@@ -24,8 +26,12 @@ public class OrderTrackingResponse {
     private String shippingAddress;
 
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     private String paymentMethod;
     private String paymentProvider;
+    private String paymentStatus;
+
     private Boolean canCancel;
 
     private List<TrackingItemDto> items;
@@ -33,6 +39,7 @@ public class OrderTrackingResponse {
     @Data
     @Builder
     public static class TrackingItemDto {
+
         private Long orderItemId;
         private Long productId;
         private Long variantId;
