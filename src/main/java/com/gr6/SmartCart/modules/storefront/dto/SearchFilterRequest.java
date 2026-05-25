@@ -6,16 +6,21 @@ import java.math.BigDecimal;
 
 @Data
 public class SearchFilterRequest {
+
     private String keyword;
+
     private Long categoryId;
+
     private BigDecimal minPrice;
+
     private BigDecimal maxPrice;
 
     /*
+     * relevance  : liên quan nhất
      * newest     : mới nhất
-     * price_asc  : giá tăng dần
-     * price_desc : giá giảm dần
      * sold_desc  : bán chạy
+     * price_asc  : giá thấp đến cao
+     * price_desc : giá cao đến thấp
      */
     private String sortBy;
 }

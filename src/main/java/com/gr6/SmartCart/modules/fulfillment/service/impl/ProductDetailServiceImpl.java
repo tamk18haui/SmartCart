@@ -120,8 +120,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                                 : null
                 )
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
-                .shopImageUrl(null)
-
+                .shopImageUrl(product.getShop().getLogoUrl())
                 .totalStock(totalStock)
                 .soldQuantity(soldQuantity)
                 .totalSold(soldQuantity)

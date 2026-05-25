@@ -43,5 +43,7 @@ public class OrderHistoryResponse {
         private Long priceAtPurchase;
 
         private String imageUrl;
+        private Boolean canReview;
+        private Boolean reviewed;
     }
 }

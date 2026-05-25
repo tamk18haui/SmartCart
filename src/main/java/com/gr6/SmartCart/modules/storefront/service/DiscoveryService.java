@@ -14,7 +14,9 @@ import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
 import com.gr6.SmartCart.modules.storefront.repository.StorefrontProductRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,6 +69,7 @@ public class DiscoveryService {
         Long categoryId = request.getCategoryId();
         BigDecimal minPrice = request.getMinPrice();
         BigDecimal maxPrice = request.getMaxPrice();
+        String sortBy = normalizeSortBy(request.getSortBy());
 
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
             BigDecimal temp = minPrice;
@@ -76,8 +79,7 @@ public class DiscoveryService {
 
         Pageable pageable = PageRequest.of(
                 normalizePage(page),
-                normalizeSize(size),
-                buildSort(request.getSortBy())
+                normalizeSize(size)
         );
 
         Page<Product> productPage = productRepository.searchActiveProducts(
@@ -85,6 +87,7 @@ public class DiscoveryService {
                 categoryId,
                 minPrice,
                 maxPrice,
+                sortBy,
                 ProductStatus.ACTIVE,
                 ShopStatus.ACTIVE,
                 CategoryStatus.ACTIVE,
@@ -113,16 +116,19 @@ public class DiscoveryService {
         if (product.getShop() != null) {
             dto.setShopId(product.getShop().getShopId());
             dto.setShopName(product.getShop().getShopName());
-            dto.setLocation(extractProvince(product.getShop().getPickupAddress()));
+
+            // Frontend đang dùng location ở vài card cũ,
+            // nên set luôn location = tên shop để không hiện địa chỉ nữa.
+            dto.setLocation(product.getShop().getShopName());
         }
 
         dto.setName(product.getName());
-
         dto.setPrice(minPrice);
         dto.setMinPrice(minPrice);
         dto.setMaxPrice(maxPrice);
 
-        if (product.getBasePrice() != null && minPrice != null
+        if (product.getBasePrice() != null
+                && minPrice != null
                 && product.getBasePrice().compareTo(minPrice) > 0) {
             dto.setOriginalPrice(product.getBasePrice());
         } else {
@@ -217,20 +223,6 @@ public class DiscoveryService {
                 .orElse(null);
     }
 
-    private String extractProvince(String pickupAddress) {
-        if (pickupAddress == null || pickupAddress.trim().isEmpty()) {
-            return "";
-        }
-
-        String[] parts = pickupAddress.split(",");
-
-        if (parts.length == 0) {
-            return pickupAddress.trim();
-        }
-
-        return parts[parts.length - 1].trim();
-    }
-
     private String normalizeKeyword(String keyword) {
         if (keyword == null) return "";
         return keyword.trim();
@@ -245,26 +237,23 @@ public class DiscoveryService {
         return Math.min(size, 50);
     }
 
-    private Sort buildSort(String sortBy) {
+    private String normalizeSortBy(String sortBy) {
         if (sortBy == null || sortBy.trim().isEmpty()) {
-            return Sort.by(Sort.Direction.DESC, "productId");
+            return "relevance";
         }
 
         String value = sortBy.trim().toLowerCase();
 
         switch (value) {
-            case "price_asc":
-                return Sort.by(Sort.Direction.ASC, "basePrice");
-
-            case "price_desc":
-                return Sort.by(Sort.Direction.DESC, "basePrice");
-
-            case "sold_desc":
-                return Sort.by(Sort.Direction.DESC, "soldCount");
-
             case "newest":
+            case "sold_desc":
+            case "price_asc":
+            case "price_desc":
+            case "relevance":
+                return value;
+
             default:
-                return Sort.by(Sort.Direction.DESC, "productId");
+                return "relevance";
         }
     }
 }
