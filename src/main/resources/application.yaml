@@ -82,7 +82,7 @@ firebase:
   # Tải file service account json từ Firebase Console:
   # Project settings -> Service accounts -> Generate new private key
   # Sau đó lưu file vào đường dẫn dưới, hoặc set biến môi trường FIREBASE_SERVICE_ACCOUNT_PATH.
-  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:E:/SmartCart/firebase-service-account.json}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:E:/PTUDTTBDD/SmartCart/firebase-service-account.json}
 ai:
   recommendation:
     base-url: ${AI_RECOMMENDATION_BASE_URL:http://127.0.0.1:8001}

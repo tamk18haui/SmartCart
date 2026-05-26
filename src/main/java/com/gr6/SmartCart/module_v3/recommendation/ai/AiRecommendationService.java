@@ -2,6 +2,7 @@ package com.gr6.SmartCart.module_v3.recommendation.ai;
 
 import com.gr6.SmartCart.common.domain.Product;
 import com.gr6.SmartCart.common.domain.ProductVariant;
+import com.gr6.SmartCart.common.domain.UserProductEvent;
 import com.gr6.SmartCart.common.enums.CategoryStatus;
 import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
@@ -148,68 +149,71 @@ public class AiRecommendationService {
 
         List<String> seedParts = new ArrayList<>();
 
-        List<String> recentKeywords = eventRepository.findRecentSearchKeywords(
+        List<UserProductEvent> searchEvents = eventRepository.findRecentSearchEvents(
                 email,
-                org.springframework.data.domain.PageRequest.of(0, 10)
+                RecommendationEventType.SEARCH,
+                org.springframework.data.domain.PageRequest.of(0, 20)
         );
 
-        for (String keyword : safeList(recentKeywords)) {
-            if (keyword == null || keyword.trim().isEmpty()) continue;
+        int searchRank = 0;
+        for (UserProductEvent event : safeList(searchEvents)) {
+            if (event.getKeyword() == null || event.getKeyword().trim().isEmpty()) continue;
 
-            String expanded = expandKeyword(keyword.trim());
-
-            seedParts.add(expanded);
-            seedParts.add(expanded);
-            seedParts.add(expanded);
+            int weight = Math.max(5, 18 - searchRank);
+            addWeighted(seedParts, expandKeyword(event.getKeyword()), weight);
+            searchRank++;
         }
 
-        List<Product> purchasedProducts = productRepository.findOrderSeedProducts(
-                email,
-                FINISHED_ORDER_STATUS,
-                ProductStatus.ACTIVE
-        );
-
-        for (Product product : safeList(purchasedProducts)) {
-            String text = buildProductText(product);
-            seedParts.add(text);
-            seedParts.add(text);
-            seedParts.add(text);
-            seedParts.add(text);
-        }
-
-        List<Product> recentEventProducts = eventRepository.findRecentSeedProducts(
+        List<UserProductEvent> behaviorEvents = eventRepository.findRecentEvents(
                 email,
                 List.of(
-                        RecommendationEventType.PURCHASE,
+                        RecommendationEventType.VIEW_PRODUCT,
                         RecommendationEventType.ADD_TO_CART,
-                        RecommendationEventType.VIEW_PRODUCT
+                        RecommendationEventType.PURCHASE
                 ),
                 ProductStatus.ACTIVE,
-                org.springframework.data.domain.PageRequest.of(0, 30)
+                org.springframework.data.domain.PageRequest.of(0, 80)
         );
 
-        for (Product product : safeList(recentEventProducts)) {
-            String text = buildProductText(product);
-            seedParts.add(text);
-            seedParts.add(text);
-        }
+        int rank = 0;
+        for (UserProductEvent event : safeList(behaviorEvents)) {
+            if (event.getProduct() == null) continue;
 
-        List<Product> cartProducts = productRepository.findCartSeedProducts(
-                email,
-                ProductStatus.ACTIVE
-        );
+            int baseWeight;
 
-        for (Product product : safeList(cartProducts)) {
-            seedParts.add(buildProductText(product));
+            if (event.getEventType() == RecommendationEventType.VIEW_PRODUCT) {
+                baseWeight = 14;
+            } else if (event.getEventType() == RecommendationEventType.ADD_TO_CART) {
+                baseWeight = 9;
+            } else if (event.getEventType() == RecommendationEventType.PURCHASE) {
+                baseWeight = 8;
+            } else {
+                baseWeight = 3;
+            }
+
+            int recencyBonus = Math.max(0, 12 - rank / 4);
+            int quantityBonus = event.getQuantity() == null ? 0 : Math.min(event.getQuantity(), 5);
+
+            int finalWeight = baseWeight + recencyBonus + quantityBonus;
+
+            addWeighted(seedParts, buildProductText(event.getProduct()), finalWeight);
+
+            if (event.getProduct().getCategory() != null) {
+                addWeighted(seedParts, event.getProduct().getCategory().getCategoryName(), Math.max(3, finalWeight / 3));
+            }
+
+            if (event.getProduct().getBrand() != null && !event.getProduct().getBrand().isBlank()) {
+                addWeighted(seedParts, event.getProduct().getBrand(), Math.max(2, finalWeight / 4));
+            }
+
+            rank++;
         }
 
         if (seedParts.isEmpty()) {
             return getTrending(page, size);
         }
 
-        String seedText = seedParts.stream()
-                .filter(text -> text != null && !text.trim().isEmpty())
-                .collect(Collectors.joining(" | "));
+        String seedText = String.join(" | ", seedParts);
 
         return recommendByText(
                 seedText,
@@ -218,9 +222,19 @@ public class AiRecommendationService {
                 null,
                 page,
                 size,
-                "ai-personal-search-purchase-view-cart",
+                "ai-personal-shopee-behavior-search-view",
                 true
         );
+    }
+
+    private void addWeighted(List<String> seedParts, String text, int weight) {
+        if (text == null || text.trim().isEmpty()) return;
+
+        int safeWeight = Math.max(1, Math.min(weight, 25));
+
+        for (int i = 0; i < safeWeight; i++) {
+            seedParts.add(text.trim());
+        }
     }
 
     public Map<String, Object> searchByImage(
