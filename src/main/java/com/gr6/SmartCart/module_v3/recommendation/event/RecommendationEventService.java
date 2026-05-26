@@ -38,11 +38,9 @@ public class RecommendationEventService {
             if (product == null || product.getProductId() == null) return;
 
             User user = userRepository.findByEmail(email).orElse(null);
-
             if (user == null || user.getUserId() == null) return;
 
             recordProductEvent(user, product, RecommendationEventType.VIEW_PRODUCT, 1);
-
         } catch (Exception e) {
             log.warn("Cannot record view product event: {}", e.getMessage());
         }
@@ -64,7 +62,6 @@ public class RecommendationEventService {
             event.setQuantity(1);
 
             eventRepository.save(event);
-
         } catch (Exception e) {
             log.warn("Cannot record search recommendation event: {}", e.getMessage());
         }
@@ -87,7 +84,6 @@ public class RecommendationEventService {
             event.setQuantity(Math.max(quantity, 1));
 
             eventRepository.save(event);
-
         } catch (Exception e) {
             log.warn("Cannot record product recommendation event: {}", e.getMessage());
         }

@@ -1,6 +1,5 @@
 package com.gr6.SmartCart.module_v3.recommendation.event;
 
-import com.gr6.SmartCart.common.domain.Product;
 import com.gr6.SmartCart.common.domain.UserProductEvent;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.RecommendationEventType;
@@ -14,17 +13,24 @@ import java.util.List;
 public interface UserProductEventRepository extends JpaRepository<UserProductEvent, Long> {
 
     @Query("""
-            select p
+            select e
             from UserProductEvent e
-            join e.product p
-            join fetch p.shop s
-            join fetch p.category c
+            left join fetch e.product p
+            left join fetch p.shop s
+            left join fetch p.category c
             where e.user.email = :email
-              and p.status = :productStatus
               and e.eventType in :types
+              and (
+                    e.product is null
+                    or (
+                        p.status = :productStatus
+                        and s.status = com.gr6.SmartCart.common.enums.ShopStatus.ACTIVE
+                        and c.categoryStatus = com.gr6.SmartCart.common.enums.CategoryStatus.ACTIVE
+                    )
+              )
             order by e.createdAt desc
             """)
-    List<Product> findRecentSeedProducts(
+    List<UserProductEvent> findRecentEvents(
             @Param("email") String email,
             @Param("types") List<RecommendationEventType> types,
             @Param("productStatus") ProductStatus productStatus,
@@ -32,16 +38,17 @@ public interface UserProductEventRepository extends JpaRepository<UserProductEve
     );
 
     @Query("""
-            select e.keyword
+            select e
             from UserProductEvent e
             where e.user.email = :email
-              and e.eventType = com.gr6.SmartCart.common.enums.RecommendationEventType.SEARCH
+              and e.eventType = :type
               and e.keyword is not null
               and e.keyword <> ''
             order by e.createdAt desc
             """)
-    List<String> findRecentSearchKeywords(
+    List<UserProductEvent> findRecentSearchEvents(
             @Param("email") String email,
+            @Param("type") RecommendationEventType type,
             Pageable pageable
     );
 }

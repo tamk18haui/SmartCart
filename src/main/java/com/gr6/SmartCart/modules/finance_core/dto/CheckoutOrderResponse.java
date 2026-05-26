@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class CheckoutOrderResponse {
     private Long orderId;
+    private Long shopOrderId;
     private Long transactionId;
     private String paymentUrl;
     private String orderStatus;

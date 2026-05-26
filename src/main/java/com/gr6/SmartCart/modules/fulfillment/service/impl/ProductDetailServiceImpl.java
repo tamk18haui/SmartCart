@@ -348,26 +348,6 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return List.of();
         }
     }
-    private void recordViewProductIfLoggedIn(Product product) {
-        try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-            if (authentication == null || !authentication.isAuthenticated()) {
-                return;
-            }
-
-            String email = authentication.getName();
-
-            if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
-                return;
-            }
-
-            recommendationEventService.recordViewProductByEmail(email, product);
-
-        } catch (Exception ignored) {
-        }
-    }
-
     private String buildVideoThumbnailUrl(String videoUrl) {
         if (videoUrl == null || videoUrl.trim().isEmpty()) {
             return null;
@@ -398,6 +378,25 @@ public class ProductDetailServiceImpl implements ProductDetailService {
         }
 
         return null;
+    }
+
+    private void recordViewProductIfLoggedIn(Product product) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return;
+            }
+
+            String email = authentication.getName();
+
+            if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
+                return;
+            }
+
+            recommendationEventService.recordViewProductByEmail(email, product);
+        } catch (Exception ignored) {
+        }
     }
     private int safeInteger(Integer value) {
         return value == null ? 0 : value;

@@ -74,7 +74,7 @@ public class SecurityFilterChainConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/fulfillment/product/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/vouchers/shop/**").permitAll()
-
+                        .requestMatchers("/api/v1/payments/**").permitAll()
                         /*
                          * =========================
                          * CATEGORY
