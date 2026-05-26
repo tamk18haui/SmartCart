@@ -14,6 +14,7 @@ import com.gr6.SmartCart.modules.fulfillment.dto.CancelOrderRequest;
 import com.gr6.SmartCart.modules.fulfillment.dto.UpdateShopOrderStatusRequest;
 import com.gr6.SmartCart.modules.fulfillment.service.OrderActionService;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.modules.notification.service.AppNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+
 import com.gr6.SmartCart.common.enums.SettlementStatus;
 import com.gr6.SmartCart.common.enums.WalletStatus;
 import com.gr6.SmartCart.common.enums.WalletTransactionType;
@@ -42,6 +45,7 @@ public class OrderActionServiceImpl implements OrderActionService {
     private final SellerSettlementRepository settlementRepository;
     private final WithdrawWalletRepository walletRepository;
     private final WithdrawWalletTransactionRepository walletTransactionRepository;
+    private final AppNotificationService appNotificationService;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -249,6 +253,65 @@ public class OrderActionServiceImpl implements OrderActionService {
         orderRepository.save(order);
     }
 
+    private void notifyOrderStatusChanged(ShopOrder shopOrder, User actor, OrderStatus newStatus) {
+        if (shopOrder == null || shopOrder.getOrder() == null) {
+            return;
+        }
+
+        User buyer = shopOrder.getOrder().getUser();
+        User seller = shopOrder.getShop() == null ? null : shopOrder.getShop().getUser();
+
+        String statusText = newStatus == null ? "" : newStatus.name();
+
+        if (buyer != null && (actor == null || !buyer.getUserId().equals(actor.getUserId()))) {
+            Map<String, String> buyerData = new java.util.HashMap<>();
+            buyerData.put("type", "ORDER");
+            buyerData.put("routeKey", "BUYER_ORDER_DETAIL");
+            buyerData.put("targetId", String.valueOf(shopOrder.getShopOrderId()));
+            buyerData.put("shopOrderId", String.valueOf(shopOrder.getShopOrderId()));
+            buyerData.put("status", statusText);
+
+            if (shopOrder.getOrder() != null && shopOrder.getOrder().getOrderId() != null) {
+                buyerData.put("orderId", String.valueOf(shopOrder.getOrder().getOrderId()));
+            }
+
+            appNotificationService.notifyUser(
+                    buyer.getUserId(),
+                    "Đơn hàng đã cập nhật",
+                    "Đơn #" + shopOrder.getShopOrderId() + " đã chuyển sang trạng thái " + statusText,
+                    com.gr6.SmartCart.common.enums.NotificationType.ORDER,
+                    "BUYER_ORDER_DETAIL",
+                    shopOrder.getShopOrderId(),
+                    null,
+                    buyerData
+            );
+        }
+
+        if (seller != null && (actor == null || !seller.getUserId().equals(actor.getUserId()))) {
+            Map<String, String> sellerData = new java.util.HashMap<>();
+            sellerData.put("type", "ORDER");
+            sellerData.put("routeKey", "SELLER_ORDER_DETAIL");
+            sellerData.put("targetId", String.valueOf(shopOrder.getShopOrderId()));
+            sellerData.put("shopOrderId", String.valueOf(shopOrder.getShopOrderId()));
+            sellerData.put("status", statusText);
+
+            if (shopOrder.getOrder() != null && shopOrder.getOrder().getOrderId() != null) {
+                sellerData.put("orderId", String.valueOf(shopOrder.getOrder().getOrderId()));
+            }
+
+            appNotificationService.notifyUser(
+                    seller.getUserId(),
+                    "Đơn hàng đã cập nhật",
+                    "Đơn #" + shopOrder.getShopOrderId() + " đã chuyển sang trạng thái " + statusText,
+                    com.gr6.SmartCart.common.enums.NotificationType.ORDER,
+                    "SELLER_ORDER_DETAIL",
+                    shopOrder.getShopOrderId(),
+                    null,
+                    sellerData
+            );
+        }
+    }
+
     @Override
     @Transactional
     public BaseResponse<String> updateShopOrderStatus(
@@ -269,7 +332,8 @@ public class OrderActionServiceImpl implements OrderActionService {
         shopOrder.setStatus(newStatus);
         shopOrder = shopOrderRepository.save(shopOrder);
 
-// Nếu đơn shop chuyển sang COMPLETED thì tự cộng tiền vào ví seller
+        notifyOrderStatusChanged(shopOrder, currentUser, newStatus);
+
         if (newStatus == OrderStatus.COMPLETED) {
             settleCompletedShopOrder(shopOrder);
         }
@@ -298,18 +362,15 @@ public class OrderActionServiceImpl implements OrderActionService {
     @Override
     @Transactional
     public BaseResponse<String> cancelOrder(Long orderId, CancelOrderRequest request) {
-        // 1. Tìm đơn hàng con của Shop (Shop_Orders)
         ShopOrder shopOrder = shopOrderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng!"));
 
-        // 2. Cập nhật trạng thái sang CANCELLED và lưu lý do
         shopOrder.setStatus(OrderStatus.CANCELLED);
         shopOrder.setCancelReason(request.getCancelReason());
 
-        // 3. DUYỆT DANH SÁCH MÓN HÀNG (Order_Items) để hoàn kho
         if (shopOrder.getItems() != null) {
             for (OrderItem item : shopOrder.getItems()) {
-                var variant = item.getVariant(); // Đổi getProductVariant() -> getVariant()
+                var variant = item.getVariant();
                 if (variant != null) {
                     int newStock = variant.getStockQuantity() + item.getQuantity();
                     variant.setStockQuantity(newStock);
@@ -318,20 +379,14 @@ public class OrderActionServiceImpl implements OrderActionService {
         }
 
         shopOrderRepository.save(shopOrder);
-        return BaseResponse.successMessage( "Đã hủy đơn và hoàn trả số lượng vào kho thành công.");
+        return BaseResponse.successMessage("Đã hủy đơn và hoàn trả số lượng vào kho thành công.");
     }
-    /**
-     * Tự động đối soát và cộng tiền vào ví seller
-     * khi ShopOrder chuyển sang COMPLETED.
-     */
+
     private void settleCompletedShopOrder(ShopOrder shopOrder) {
-        // Chỉ xử lý đơn đã hoàn thành
         if (shopOrder.getStatus() != OrderStatus.COMPLETED) {
             return;
         }
 
-        // Nếu đơn này đã được đối soát rồi thì bỏ qua
-        // Tránh cộng tiền 2 lần vào ví seller
         if (settlementRepository.existsByShopOrder_ShopOrderId(shopOrder.getShopOrderId())) {
             return;
         }
@@ -339,29 +394,20 @@ public class OrderActionServiceImpl implements OrderActionService {
         Shop shop = shopOrder.getShop();
         User seller = shop.getUser();
 
-        // Tạo ví cho seller nếu seller chưa có ví
         getOrCreateWallet(seller);
 
-        // Lấy ví seller và khóa ví để tránh lỗi cộng tiền đồng thời
         Wallet lockedWallet = walletRepository.findByUserIdForUpdate(seller.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ví seller"));
 
-        // Tổng tiền của đơn shop
         long gross = shopOrder.getTotalAmount() == null ? 0L : shopOrder.getTotalAmount();
-
-        // Hoa hồng sàn, hiện tại đang để 0%
         long commission = gross * PLATFORM_COMMISSION_PERCENT / 100;
-
-        // Số tiền thực nhận của seller
         long net = gross - commission;
 
-        // Cộng tiền vào ví seller
         lockedWallet.setBalance(
                 (lockedWallet.getBalance() == null ? 0L : lockedWallet.getBalance()) + net
         );
         walletRepository.save(lockedWallet);
 
-        // Tạo bản ghi đối soát để đánh dấu đơn này đã cộng tiền
         SellerSettlement settlement = SellerSettlement.builder()
                 .shopOrder(shopOrder)
                 .seller(seller)
@@ -376,7 +422,6 @@ public class OrderActionServiceImpl implements OrderActionService {
 
         settlementRepository.save(settlement);
 
-        // Tạo lịch sử giao dịch ví
         WalletTransaction tx = new WalletTransaction();
         tx.setWallet(lockedWallet);
         tx.setType(WalletTransactionType.TOP_UP);
@@ -386,10 +431,6 @@ public class OrderActionServiceImpl implements OrderActionService {
         walletTransactionRepository.save(tx);
     }
 
-    /**
-     * Lấy ví seller.
-     * Nếu seller chưa có ví thì tự động tạo ví mới.
-     */
     private Wallet getOrCreateWallet(User seller) {
         return walletRepository.findByUser_UserId(seller.getUserId())
                 .orElseGet(() -> {
@@ -401,3 +442,5 @@ public class OrderActionServiceImpl implements OrderActionService {
                 });
     }
 }
+
+

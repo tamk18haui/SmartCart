@@ -3,7 +3,10 @@ package com.gr6.SmartCart.modules.identity.service.impl;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.Shop;
 import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.ShopStatus;
+import com.gr6.SmartCart.modules.catalog.repository.CatalogReviewRepository;
+import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
 import com.gr6.SmartCart.modules.identity.dto.ShopInfoResponse;
 import com.gr6.SmartCart.modules.identity.dto.ShopManagerRequest;
 import com.gr6.SmartCart.modules.identity.repository.ShopRepository;
@@ -21,6 +24,8 @@ public class ShopManagerServiceImpl implements ShopManagerService {
 
     private final ShopRepository shopRepository;
     private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final CatalogReviewRepository catalogReviewRepository;
 
     @Override
     @Transactional
@@ -89,6 +94,23 @@ public class ShopManagerServiceImpl implements ShopManagerService {
     }
 
     private ShopInfoResponse mapToResponse(Shop shop) {
+        Long shopId = shop.getShopId();
+
+        Long productCount = 0L;
+        Double ratingAverage = 0.0;
+        Long reviewCount = 0L;
+
+        if (shopId != null) {
+            productCount = productRepository.countSellerProductsByShopId(
+                    shopId,
+                    ProductStatus.DELETED,
+                    ProductStatus.BANNED
+            );
+
+            ratingAverage = catalogReviewRepository.getAverageRatingByShopId(shopId);
+            reviewCount = catalogReviewRepository.getReviewCountByShopId(shopId);
+        }
+
         return ShopInfoResponse.builder()
                 .shopId(shop.getShopId())
                 .shopName(shop.getShopName())
@@ -97,6 +119,9 @@ public class ShopManagerServiceImpl implements ShopManagerService {
                 .status(shop.getStatus() == null ? null : shop.getStatus().name())
                 .logoUrl(shop.getLogoUrl())
                 .coverUrl(shop.getCoverUrl())
+                .productCount(productCount == null ? 0L : productCount)
+                .ratingAverage(ratingAverage == null ? 0.0 : ratingAverage)
+                .reviewCount(reviewCount == null ? 0L : reviewCount)
                 .build();
     }
 

@@ -2,20 +2,29 @@ package com.gr6.SmartCart.common.domain;
 
 import com.gr6.SmartCart.common.enums.NotificationType;
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
 
-@Entity @Table(name = "Notifications")
+@Entity
+@Table(
+        name = "Notifications",
+        indexes = {
+                @Index(name = "idx_notification_user_read", columnList = "user_id,is_read"),
+                @Index(name = "idx_notification_user_created", columnList = "user_id,created_at")
+        }
+)
 @Getter
 @Setter
 public class Notification {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long notificationId;
 
-    @ManyToOne @JoinColumn(name = "user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @Column(length = 255)
@@ -24,11 +33,23 @@ public class Notification {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Enumerated(EnumType.STRING) @Column(length = 50)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
     private NotificationType type;
 
-    private Boolean isRead;
+    @Column(name = "is_read")
+    private Boolean isRead = false;
+
+    @Column(name = "route_key", length = 80)
+    private String routeKey;
+
+    @Column(name = "target_id")
+    private Long targetId;
+
+    @Column(name = "route_params", columnDefinition = "TEXT")
+    private String routeParams;
 
     @CreationTimestamp
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

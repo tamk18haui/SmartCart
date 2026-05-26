@@ -17,4 +17,9 @@ public class ShopInfoResponse {
     private String status;
     private String logoUrl;
     private String coverUrl;
+
+    // Thống kê thật của shop
+    private Long productCount;
+    private Double ratingAverage;
+    private Long reviewCount;
 }

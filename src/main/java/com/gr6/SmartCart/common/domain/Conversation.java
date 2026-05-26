@@ -38,6 +38,7 @@ public class Conversation {
     @JoinColumn(name = "user_two_id", nullable = false)
     private User userTwo;
 
+    @Builder.Default
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
     private List<Message> messages = new ArrayList<>();

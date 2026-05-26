@@ -7,6 +7,7 @@ import com.gr6.SmartCart.common.enums.*;
 import com.gr6.SmartCart.module_v3.withdraw.dto.*;
 import com.gr6.SmartCart.module_v3.withdraw.repository.*;
 import com.gr6.SmartCart.module_v3.withdraw.service.AdminWithdrawService;
+import com.gr6.SmartCart.modules.notification.service.AppNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +41,8 @@ public class AdminWithdrawServiceImpl implements AdminWithdrawService {
 
     // Repository quản lý yêu cầu rút tiền của seller.
     private final WithdrawRequestRepository withdrawRequestRepository;
+
+    private final AppNotificationService appNotificationService;
 
     /**
      * Chức năng: Admin đối soát các đơn hàng đã hoàn thành.
@@ -227,6 +231,25 @@ public class AdminWithdrawServiceImpl implements AdminWithdrawService {
         );
     }
 
+
+    private void notifyWithdrawApproved(WithdrawRequest withdraw) {
+        if (withdraw == null || withdraw.getSeller() == null) {
+            return;
+        }
+
+        appNotificationService.notifyUser(
+                withdraw.getSeller().getUserId(),
+                "Rút tiền thành công",
+                "Yêu cầu rút tiền #" + withdraw.getWithdrawId() + " đã được admin xác nhận",
+                NotificationType.WITHDRAW,
+                Map.of(
+                        "type", "WITHDRAW",
+                        "withdrawId", String.valueOf(withdraw.getWithdrawId()),
+                        "status", WithdrawStatus.APPROVED.name()
+                )
+        );
+    }
+
     /**
      * Chức năng: Admin duyệt yêu cầu rút tiền.
      *
@@ -267,6 +290,8 @@ public class AdminWithdrawServiceImpl implements AdminWithdrawService {
 
         // Lưu lại yêu cầu rút tiền.
         withdraw = withdrawRequestRepository.save(withdraw);
+
+        notifyWithdrawApproved(withdraw);
 
         return BaseResponse.success_data(
                 "Duyệt rút tiền thành công",

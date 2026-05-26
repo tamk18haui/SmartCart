@@ -11,6 +11,7 @@ import com.gr6.SmartCart.modules.finance_core.service.PaymentGatewayService;
 import com.gr6.SmartCart.modules.finance_core.service.VoucherService;
 import com.gr6.SmartCart.modules.identity.repository.ShopRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.modules.notification.service.AppNotificationService;
 import com.gr6.SmartCart.modules.storefront.repository.CartItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -40,6 +41,7 @@ public class OrderServiceImpl implements OrderService {
     private final TransactionRepository transactionRepository;
     private final VoucherService voucherService;
     private final PaymentGatewayService paymentGatewayService;
+    private final AppNotificationService appNotificationService;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -74,15 +76,13 @@ public class OrderServiceImpl implements OrderService {
 
         return address;
     }
+
     private void validateShopCanSell(Shop shop) {
         if (shop.getStatus() != ShopStatus.ACTIVE) {
             throw new RuntimeException("Shop " + shop.getShopName() + " chưa hoạt động hoặc đã bị khóa!");
         }
     }
 
-    // ==========================================
-    // BỌC THÉP BẢO MẬT: KIỂM TRA HÀNG HỢP LỆ
-    // ==========================================
     private void validateVariantCanBuy(ProductVariant variant, Long expectedShopId) {
         if (variant == null || variant.getProduct() == null) {
             throw new RuntimeException("Biến thể sản phẩm không hợp lệ!");
@@ -111,9 +111,6 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    // ==========================================
-    // BỌC THÉP BẢO MẬT: LẤY GIÁ AN TOÀN
-    // ==========================================
     private long getUnitPrice(ProductVariant variant) {
         if (variant.getPrice() != null) {
             return variant.getPrice().longValue();
@@ -272,6 +269,37 @@ public class OrderServiceImpl implements OrderService {
                 .checkoutSource(order.getCheckoutSource() == null ? null : order.getCheckoutSource().name())
                 .totalAmount(order.getTotalAmount().longValue())
                 .build();
+    }
+
+    private void notifySellerNewOrder(ShopOrder shopOrder) {
+        if (shopOrder == null || shopOrder.getShop() == null || shopOrder.getShop().getUser() == null) {
+            return;
+        }
+
+        Long sellerId = shopOrder.getShop().getUser().getUserId();
+        Long shopOrderId = shopOrder.getShopOrderId();
+        String shopName = shopOrder.getShop().getShopName() == null ? "shop" : shopOrder.getShop().getShopName();
+
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "ORDER");
+        data.put("routeKey", "SELLER_ORDER_DETAIL");
+        data.put("targetId", String.valueOf(shopOrderId));
+        data.put("shopOrderId", String.valueOf(shopOrderId));
+
+        if (shopOrder.getOrder() != null && shopOrder.getOrder().getOrderId() != null) {
+            data.put("orderId", String.valueOf(shopOrder.getOrder().getOrderId()));
+        }
+
+        appNotificationService.notifyUser(
+                sellerId,
+                "Bạn có đơn hàng mới",
+                "Shop " + shopName + " vừa nhận đơn #" + shopOrderId,
+                NotificationType.ORDER,
+                "SELLER_ORDER_DETAIL",
+                shopOrderId,
+                null,
+                data
+        );
     }
 
     @Override
@@ -467,6 +495,10 @@ public class OrderServiceImpl implements OrderService {
 
             ShopOrder savedShopOrder = shopOrderRepository.save(shopOrder);
 
+            if (request.getPaymentMethod() == PaymentMethod.COD) {
+                notifySellerNewOrder(savedShopOrder);
+            }
+
             for (Map.Entry<Long, Integer> entry : mergedQuantity.entrySet()) {
                 ProductVariant variant = variantRepository.findById(entry.getKey())
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể sản phẩm!"));
@@ -531,9 +563,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public BaseResponse<?> handlePaymentCallback(PaymentCallbackRequest request) {
-        // Gọi hằng số qua đường dẫn nếu không có import tĩnh
         if (!"123456789_DEV_SIGNATURE".equals(request.getSignature()) && request.getSignature() != null) {
-            // (Tuỳ thuộc vào logic team, có thể điều chỉnh lại hàm kiểm tra chữ ký nếu cần)
         }
 
         Order order = orderRepository.findById(request.getOrderId())
@@ -618,6 +648,7 @@ public class OrderServiceImpl implements OrderService {
 
             shopOrder.setStatus(OrderStatus.PENDING);
             shopOrderRepository.save(shopOrder);
+            notifySellerNewOrder(shopOrder);
         }
 
         order.setPaymentStatus(PaymentStatus.COMPLETED);

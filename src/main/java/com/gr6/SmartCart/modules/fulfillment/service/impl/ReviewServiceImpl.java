@@ -9,6 +9,7 @@ import com.gr6.SmartCart.common.domain.ProductVariant;
 import com.gr6.SmartCart.common.domain.Review;
 import com.gr6.SmartCart.common.domain.ShopOrder;
 import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.enums.NotificationType;
 import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.UserRole;
 import com.gr6.SmartCart.modules.finance_core.repository.OrderItemRepository;
@@ -20,6 +21,7 @@ import com.gr6.SmartCart.modules.fulfillment.dto.SellerReplyRequest;
 import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
 import com.gr6.SmartCart.modules.fulfillment.service.ReviewService;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.modules.notification.service.AppNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +42,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderItemRepository orderItemRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final AppNotificationService appNotificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -165,6 +170,15 @@ public class ReviewServiceImpl implements ReviewService {
         review.setVideoUrl(cleanUrl(request.getVideoUrl()));
 
         Review saved = reviewRepository.save(review);
+
+        /*
+         * Gửi thông báo cho seller khi có đánh giá mới
+         * Không để notification làm hỏng flow đánh giá
+         */
+        try {
+            notifySellerAboutNewReview(saved);
+        } catch (Exception ignored) {
+        }
 
         return BaseResponse.success_data(
                 "Đánh giá sản phẩm thành công",
@@ -350,6 +364,68 @@ public class ReviewServiceImpl implements ReviewService {
                 .updatedAt(review.getUpdatedAt())
                 .repliedAt(review.getRepliedAt())
                 .build();
+    }
+
+    private void notifySellerAboutNewReview(Review review) {
+        if (review == null
+                || review.getProduct() == null
+                || review.getProduct().getShop() == null
+                || review.getProduct().getShop().getUser() == null) {
+            return;
+        }
+
+        Long sellerId = review.getProduct()
+                .getShop()
+                .getUser()
+                .getUserId();
+
+        Long productId = review.getProduct().getProductId();
+
+        String productName = review.getProduct().getName();
+
+        String buyerName = review.getUser() != null
+                ? review.getUser().getFullName()
+                : "Khách hàng";
+
+        String title = "Có đánh giá sản phẩm mới";
+
+        String content = buyerName
+                + " vừa đánh giá "
+                + review.getRating()
+                + " sao cho sản phẩm: "
+                + productName;
+
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "REVIEW");
+        data.put("routeKey", "SELLER_PRODUCT_REVIEWS");
+
+        if (productId != null) {
+            data.put("targetId", String.valueOf(productId));
+            data.put("productId", String.valueOf(productId));
+        }
+
+        data.put("productName", productName == null ? "" : productName);
+
+        appNotificationService.notifyUser(
+                sellerId,
+                title,
+                content,
+                NotificationType.SYSTEM,
+                "SELLER_PRODUCT_REVIEWS",
+                productId,
+                "{\"productName\":\"" + safeJson(productName) + "\"}",
+                data
+        );
+    }
+
+    private String safeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     private String resolveProductImage(Product product, ProductVariant variant) {
