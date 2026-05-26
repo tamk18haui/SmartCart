@@ -2,5 +2,8 @@ package com.gr6.SmartCart.common.enums;
 
 public enum NotificationType {
     SYSTEM,
-    ORDER
+    ORDER,
+    CHAT,
+    WALLET,
+    WITHDRAW
 }

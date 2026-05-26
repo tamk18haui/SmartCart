@@ -21,4 +21,18 @@ public interface CatalogReviewRepository extends JpaRepository<Review, Long> {
             WHERE r.product.productId = :productId
             """)
     Integer getReviewCountByProductId(@Param("productId") Long productId);
+
+    @Query("""
+            SELECT COALESCE(AVG(r.rating), 0.0)
+            FROM Review r
+            WHERE r.product.shop.shopId = :shopId
+            """)
+    Double getAverageRatingByShopId(@Param("shopId") Long shopId);
+
+    @Query("""
+            SELECT COUNT(r)
+            FROM Review r
+            WHERE r.product.shop.shopId = :shopId
+            """)
+    Long getReviewCountByShopId(@Param("shopId") Long shopId);
 }

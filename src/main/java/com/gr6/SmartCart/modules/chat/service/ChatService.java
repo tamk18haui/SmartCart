@@ -3,12 +3,14 @@ package com.gr6.SmartCart.modules.chat.service;
 import com.gr6.SmartCart.common.domain.Conversation;
 import com.gr6.SmartCart.common.domain.Message;
 import com.gr6.SmartCart.common.domain.User;
+import com.gr6.SmartCart.common.enums.NotificationType;
 import com.gr6.SmartCart.modules.chat.dto.ChatMessageRequest;
 import com.gr6.SmartCart.modules.chat.dto.ChatMessageResponse;
 import com.gr6.SmartCart.modules.chat.dto.ConversationResponse;
 import com.gr6.SmartCart.modules.chat.repository.ChatMessageRepository;
 import com.gr6.SmartCart.modules.chat.repository.ConversationRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
+import com.gr6.SmartCart.modules.notification.service.AppNotificationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,7 @@ public class ChatService {
     private final UserRepository userRepository;
     private final ConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
+    private final AppNotificationService appNotificationService;
 
     @Transactional
     public ChatMessageResponse saveMessage(String senderEmail, ChatMessageRequest request) {
@@ -53,15 +57,43 @@ public class ChatService {
 
         Conversation conversation = getOrCreateConversation(sender, receiver);
 
+        String content = request.getContent() == null ? "" : request.getContent().trim();
+        String imageUrl = request.getImageUrl() == null ? "" : request.getImageUrl().trim();
+
+        if (content.isBlank() && imageUrl.isBlank()) {
+            throw new RuntimeException("Tin nhắn không được trống");
+        }
+
+        String messageType = request.getMessageType();
+        if (messageType == null || messageType.isBlank()) {
+            messageType = imageUrl.isBlank() ? "TEXT" : "IMAGE";
+        }
+
         Message message = new Message();
         message.setConversation(conversation);
         message.setSender(sender);
         message.setReceiver(receiver);
-        message.setContent(request.getContent().trim());
+        message.setContent(content.isBlank() ? "[Ảnh]" : content);
+        message.setImageUrl(imageUrl.isBlank() ? null : imageUrl);
+        message.setMessageType(messageType.trim().toUpperCase());
 
         Message saved = messageRepository.save(message);
-        conversation.setLastMessage(saved.getContent());
+        conversation.setLastMessage("IMAGE".equalsIgnoreCase(saved.getMessageType()) && content.isBlank()
+                ? "[Ảnh]"
+                : saved.getContent());
         conversationRepository.save(conversation);
+
+        appNotificationService.notifyUser(
+                receiver.getUserId(),
+                "Tin nhắn mới từ " + safeName(sender),
+                saved.getContent(),
+                NotificationType.CHAT,
+                Map.of(
+                        "type", "CHAT",
+                        "senderId", String.valueOf(sender.getUserId()),
+                        "conversationId", String.valueOf(conversation.getConversationId())
+                )
+        );
 
         return toMessageResponse(saved);
     }
@@ -121,6 +153,13 @@ public class ChatService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user đang đăng nhập"));
     }
 
+    private String safeName(User user) {
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        return user.getEmail();
+    }
+
     private ConversationResponse toConversationResponse(Conversation conversation, User currentUser) {
         User partner = conversation.getUserOne().getUserId().equals(currentUser.getUserId())
                 ? conversation.getUserTwo()
@@ -148,6 +187,8 @@ public class ChatService {
                 .receiverName(message.getReceiver().getFullName())
                 .receiverAvatarUrl(message.getReceiver().getAvatarUrl())
                 .content(message.getContent())
+                .imageUrl(message.getImageUrl())
+                .messageType(message.getMessageType())
                 .createdAt(message.getCreatedAt())
                 .readAt(message.getReadAt())
                 .build();

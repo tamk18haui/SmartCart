@@ -30,6 +30,14 @@ public class Review {
     @JoinColumn(name = "order_item_id", nullable = false, unique = true)
     private OrderItem orderItem;
 
+    /*
+     * Bảng Reviews trong CSDL có cột order_id NOT NULL.
+     * Vì vậy entity phải map thêm Order để Hibernate insert được order_id.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

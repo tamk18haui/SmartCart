@@ -102,4 +102,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             ProductStatus status,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT COUNT(p)
+            FROM Product p
+            WHERE p.shop.shopId = :shopId
+              AND p.status <> :deletedStatus
+              AND p.status <> :bannedStatus
+            """)
+    Long countSellerProductsByShopId(
+            @Param("shopId") Long shopId,
+            @Param("deletedStatus") ProductStatus deletedStatus,
+            @Param("bannedStatus") ProductStatus bannedStatus
+    );
 }

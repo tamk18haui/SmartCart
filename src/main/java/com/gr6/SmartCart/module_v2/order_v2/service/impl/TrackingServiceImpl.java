@@ -118,7 +118,7 @@ public class TrackingServiceImpl implements TrackingService {
                           reviewed = reviewRepository.existsByOrderItem_OrderItemId(item.getOrderItemId());
                       }
 
-                      boolean canReview = shopOrder.getStatus() == OrderStatus.COMPLETED && !reviewed;
+                      boolean canReview = isCompletedForReview(shopOrder) && !reviewed;
 
                       ProductVariant variant = item.getVariant();
                       Product product = variant == null ? null : variant.getProduct();
@@ -198,6 +198,7 @@ public class TrackingServiceImpl implements TrackingService {
 
         return BaseResponse.success_data("Đơn hàng đã hoàn thành", "OK");
     }
+
     @Override
     @Transactional
     public BaseResponse<CheckoutOrderResponse> retryPayment(Long shopOrderId) {
@@ -351,6 +352,19 @@ public class TrackingServiceImpl implements TrackingService {
         orderRepository.save(order);
     }
 
+    private boolean isCompletedForReview(ShopOrder shopOrder) {
+        if (shopOrder == null) {
+            return false;
+        }
+
+        if (shopOrder.getStatus() == OrderStatus.COMPLETED) {
+            return true;
+        }
+
+        return shopOrder.getOrder() != null
+                && shopOrder.getOrder().getStatus() == OrderStatus.COMPLETED;
+    }
+
     private OrderHistoryResponse.OrderHistoryItemResponse mapHistoryItem(OrderItem item) {
         if (item == null) {
             return OrderHistoryResponse.OrderHistoryItemResponse.builder()
@@ -374,9 +388,7 @@ public class TrackingServiceImpl implements TrackingService {
 
         ShopOrder shopOrder = item.getShopOrder();
 
-        boolean canReview = shopOrder != null
-                && shopOrder.getStatus() == OrderStatus.COMPLETED
-                && !reviewed;
+        boolean canReview = isCompletedForReview(shopOrder) && !reviewed;
 
         return OrderHistoryResponse.OrderHistoryItemResponse.builder()
                 .orderItemId(item.getOrderItemId())
@@ -391,8 +403,11 @@ public class TrackingServiceImpl implements TrackingService {
                 .reviewed(reviewed)
                 .build();
     }
+
     private String getBestImageUrl(ProductVariant variant) {
-        if (variant == null) return null;
+        if (variant == null) {
+            return null;
+        }
 
         if (!isBlank(variant.getImageUrl())) {
             return variant.getImageUrl().trim();
