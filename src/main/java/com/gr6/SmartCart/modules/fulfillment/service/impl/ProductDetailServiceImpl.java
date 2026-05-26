@@ -13,12 +13,15 @@ import com.gr6.SmartCart.common.enums.OrderStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.ShopStatus;
 import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.module_v3.recommendation.event.RecommendationEventService;
 import com.gr6.SmartCart.modules.catalog.repository.CatalogOrderItemRepository;
 import com.gr6.SmartCart.modules.catalog.repository.ProductRepository;
 import com.gr6.SmartCart.modules.fulfillment.dto.ProductDetailResponse;
 import com.gr6.SmartCart.modules.fulfillment.repository.ReviewRepository;
 import com.gr6.SmartCart.modules.fulfillment.service.ProductDetailService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +42,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
     private final ReviewRepository reviewRepository;
     private final CatalogOrderItemRepository catalogOrderItemRepository;
     private final ObjectMapper objectMapper;
+    private final RecommendationEventService recommendationEventService;
 
     /**
      * Lấy chi tiết sản phẩm cho buyer.
@@ -121,6 +125,11 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 )
                 .shopName(product.getShop() != null ? product.getShop().getShopName() : null)
                 .shopImageUrl(product.getShop().getLogoUrl())
+                .shopStatus(
+                        product.getShop() != null && product.getShop().getStatus() != null
+                                ? product.getShop().getStatus().name()
+                                : null
+                )
                 .totalStock(totalStock)
                 .soldQuantity(soldQuantity)
                 .totalSold(soldQuantity)
@@ -133,7 +142,7 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .variants(variantDTOs)
                 .reviews(reviewDTOs)
                 .build();
-
+        recordViewProductIfLoggedIn(product);
         return BaseResponse.success_data("Lấy chi tiết sản phẩm thành công", response);
     }
 
@@ -274,13 +283,13 @@ public class ProductDetailServiceImpl implements ProductDetailService {
                 .comment(review.getComment())
                 .imageUrls(parseReviewImageUrls(review.getImageUrls()))
                 .videoUrl(review.getVideoUrl())
+                .videoThumbnailUrl(buildVideoThumbnailUrl(review.getVideoUrl()))
                 .userName(review.getUser() != null ? review.getUser().getFullName() : "Người dùng SmartCart")
                 .sellerReply(review.getSellerReply())
                 .createdAt(review.getCreatedAt())
                 .repliedAt(review.getRepliedAt())
                 .build();
     }
-
     /**
      * Tách chuỗi ảnh sản phẩm.
      *
@@ -339,7 +348,57 @@ public class ProductDetailServiceImpl implements ProductDetailService {
             return List.of();
         }
     }
+    private void recordViewProductIfLoggedIn(Product product) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return;
+            }
+
+            String email = authentication.getName();
+
+            if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
+                return;
+            }
+
+            recommendationEventService.recordViewProductByEmail(email, product);
+
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String buildVideoThumbnailUrl(String videoUrl) {
+        if (videoUrl == null || videoUrl.trim().isEmpty()) {
+            return null;
+        }
+
+        String url = videoUrl.trim();
+
+        if (url.contains("/video/upload/")) {
+            String thumbnail = url.replace("/video/upload/", "/video/upload/so_0/");
+            int queryIndex = thumbnail.indexOf("?");
+
+            String query = "";
+
+            if (queryIndex >= 0) {
+                query = thumbnail.substring(queryIndex);
+                thumbnail = thumbnail.substring(0, queryIndex);
+            }
+
+            int dotIndex = thumbnail.lastIndexOf(".");
+
+            if (dotIndex > thumbnail.lastIndexOf("/")) {
+                thumbnail = thumbnail.substring(0, dotIndex) + ".jpg";
+            } else {
+                thumbnail = thumbnail + ".jpg";
+            }
+
+            return thumbnail + query;
+        }
+
+        return null;
+    }
     private int safeInteger(Integer value) {
         return value == null ? 0 : value;
     }

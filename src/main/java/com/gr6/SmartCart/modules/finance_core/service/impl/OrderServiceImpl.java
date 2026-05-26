@@ -3,6 +3,7 @@ package com.gr6.SmartCart.modules.finance_core.service.impl;
 import com.gr6.SmartCart.common.base.BaseResponse;
 import com.gr6.SmartCart.common.domain.*;
 import com.gr6.SmartCart.common.enums.*;
+import com.gr6.SmartCart.module_v3.recommendation.event.RecommendationEventService;
 import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
 import com.gr6.SmartCart.modules.finance_core.dto.*;
 import com.gr6.SmartCart.modules.finance_core.repository.*;
@@ -42,6 +43,7 @@ public class OrderServiceImpl implements OrderService {
     private final VoucherService voucherService;
     private final PaymentGatewayService paymentGatewayService;
     private final AppNotificationService appNotificationService;
+    private final RecommendationEventService recommendationEventService;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -76,13 +78,15 @@ public class OrderServiceImpl implements OrderService {
 
         return address;
     }
-
     private void validateShopCanSell(Shop shop) {
         if (shop.getStatus() != ShopStatus.ACTIVE) {
             throw new RuntimeException("Shop " + shop.getShopName() + " chưa hoạt động hoặc đã bị khóa!");
         }
     }
 
+    // ==========================================
+    // BỌC THÉP BẢO MẬT: KIỂM TRA HÀNG HỢP LỆ
+    // ==========================================
     private void validateVariantCanBuy(ProductVariant variant, Long expectedShopId) {
         if (variant == null || variant.getProduct() == null) {
             throw new RuntimeException("Biến thể sản phẩm không hợp lệ!");
@@ -111,6 +115,9 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // ==========================================
+    // BỌC THÉP BẢO MẬT: LẤY GIÁ AN TOÀN
+    // ==========================================
     private long getUnitPrice(ProductVariant variant) {
         if (variant.getPrice() != null) {
             return variant.getPrice().longValue();
@@ -510,6 +517,13 @@ public class OrderServiceImpl implements OrderService {
                 orderItem.setPriceAtPurchase(getUnitPrice(variant));
 
                 orderItemRepository.save(orderItem);
+                if (request.getPaymentMethod() == PaymentMethod.COD) {
+                    recommendationEventService.recordPurchase(
+                            user,
+                            variant.getProduct(),
+                            entry.getValue()
+                    );
+                }
             }
 
             if (request.getPaymentMethod() == PaymentMethod.COD
@@ -563,7 +577,9 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public BaseResponse<?> handlePaymentCallback(PaymentCallbackRequest request) {
+        // Gọi hằng số qua đường dẫn nếu không có import tĩnh
         if (!"123456789_DEV_SIGNATURE".equals(request.getSignature()) && request.getSignature() != null) {
+            // (Tuỳ thuộc vào logic team, có thể điều chỉnh lại hàm kiểm tra chữ ký nếu cần)
         }
 
         Order order = orderRepository.findById(request.getOrderId())
@@ -661,6 +677,17 @@ public class OrderServiceImpl implements OrderService {
 
         if (order.getCheckoutSource() == CheckoutSource.FROM_CART) {
             deleteCheckedOutCartItems(order.getUser(), checkedOutVariantIds);
+        }
+        for (ShopOrder shopOrder : shopOrders) {
+            for (OrderItem item : shopOrder.getItems()) {
+                if (item.getVariant() != null && item.getVariant().getProduct() != null) {
+                    recommendationEventService.recordPurchase(
+                            order.getUser(),
+                            item.getVariant().getProduct(),
+                            item.getQuantity()
+                    );
+                }
+            }
         }
 
         return BaseResponse.success_data(

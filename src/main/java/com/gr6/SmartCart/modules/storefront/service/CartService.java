@@ -9,6 +9,7 @@ import com.gr6.SmartCart.common.enums.CategoryStatus;
 import com.gr6.SmartCart.common.enums.ProductStatus;
 import com.gr6.SmartCart.common.enums.ShopStatus;
 import com.gr6.SmartCart.common.enums.VariantStatus;
+import com.gr6.SmartCart.module_v3.recommendation.event.RecommendationEventService;
 import com.gr6.SmartCart.modules.catalog.repository.ProductVariantRepository;
 import com.gr6.SmartCart.modules.identity.repository.UserRepository;
 import com.gr6.SmartCart.modules.storefront.dto.CartDetailResponseDTO;
@@ -40,6 +41,9 @@ public class CartService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RecommendationEventService recommendationEventService;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -200,6 +204,13 @@ public class CartService {
 
         cartItem.setQuantity(newQuantity);
         cartItemRepository.save(cartItem);
+
+        recommendationEventService.recordAddToCart(
+                user,
+                variant.getProduct(),
+                request.getQuantity()
+        );
+
         return "Đã thêm sản phẩm vào giỏ hàng!";
     }
 

@@ -28,6 +28,7 @@ public class ProductDetailResponse {
     private List<String> imageUrls;
 
     private Long shopId;
+    private String shopStatus;
     private Long shopOwnerId;
     private String shopName;
     private String shopImageUrl;
@@ -79,6 +80,7 @@ public class ProductDetailResponse {
 
         private List<String> imageUrls;
         private String videoUrl;
+        private String videoThumbnailUrl;
 
         private String userName;
         private String sellerReply;

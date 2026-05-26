@@ -99,7 +99,10 @@ public class SecurityFilterChainConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/trending").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/product/**").permitAll()
-
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/ai/trending").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/ai/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v3/recommendations/ai/product/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v3/recommendations/ai/image-search").permitAll()
                         /*
                          * =========================
                          * ADMIN
