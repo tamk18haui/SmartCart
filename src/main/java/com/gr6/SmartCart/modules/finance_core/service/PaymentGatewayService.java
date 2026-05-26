@@ -6,5 +6,10 @@ import com.gr6.SmartCart.common.enums.PaymentProvider;
 import com.gr6.SmartCart.modules.finance_core.dto.PaymentCreateResult;
 
 public interface PaymentGatewayService {
-    PaymentCreateResult createPaymentUrl(Order order, Transaction transaction, PaymentProvider provider);
+
+    PaymentCreateResult createPaymentUrl(
+            Order order,
+            Transaction transaction,
+            PaymentProvider provider
+    );
 }

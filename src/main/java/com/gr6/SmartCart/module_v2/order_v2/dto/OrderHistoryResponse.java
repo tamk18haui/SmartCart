@@ -24,6 +24,10 @@ public class OrderHistoryResponse {
     private OrderStatus status;
     private BigDecimal totalAmount;
     private LocalDateTime createdAt;
+    private String paymentMethod;
+    private String paymentProvider;
+    private String paymentStatus;
+    private Boolean canCancel;
 
     // Danh sách sản phẩm thuộc đúng orderId + shopId này
     private List<OrderHistoryItemResponse> items;

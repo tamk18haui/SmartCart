@@ -13,12 +13,12 @@ public class PaymentCryptoUtil {
     private PaymentCryptoUtil() {
     }
 
-    public static String hmacSHA256(String data, String key) {
-        return hmac(data, key, "HmacSHA256");
-    }
-
     public static String hmacSHA512(String data, String key) {
         return hmac(data, key, "HmacSHA512");
+    }
+
+    public static String hmacSHA256(String data, String key) {
+        return hmac(data, key, "HmacSHA256");
     }
 
     private static String hmac(String data, String key, String algorithm) {
@@ -43,19 +43,15 @@ public class PaymentCryptoUtil {
             return hash.toString();
 
         } catch (Exception e) {
-            throw new RuntimeException("Không tạo được chữ ký thanh toán");
+            throw new RuntimeException("Không tạo được chữ ký thanh toán", e);
         }
     }
 
     public static String urlEncode(String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
 
-        /*
-         * Quan trọng:
-         * Không replace "+" thành "%20".
-         * URLEncoder mặc định encode dấu cách thành "+".
-         * VNPay callback verify rất nhạy với khác biệt encode.
-         */
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 

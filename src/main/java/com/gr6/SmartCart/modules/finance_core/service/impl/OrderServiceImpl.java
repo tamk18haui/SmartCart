@@ -268,14 +268,35 @@ public class OrderServiceImpl implements OrderService {
     ) {
         return CheckoutOrderResponse.builder()
                 .orderId(order.getOrderId())
+                .shopOrderId(resolveFirstShopOrderId(order))
                 .transactionId(transaction == null ? null : transaction.getTransactionId())
                 .paymentUrl(paymentUrl)
-                .orderStatus(order.getStatus().name())
-                .paymentStatus(order.getPaymentStatus().name())
+                .orderStatus(order.getStatus() == null ? null : order.getStatus().name())
+                .paymentStatus(order.getPaymentStatus() == null ? null : order.getPaymentStatus().name())
                 .paymentProvider(order.getPaymentProvider() == null ? null : order.getPaymentProvider().name())
                 .checkoutSource(order.getCheckoutSource() == null ? null : order.getCheckoutSource().name())
-                .totalAmount(order.getTotalAmount().longValue())
+                .totalAmount(order.getTotalAmount() == null ? 0L : order.getTotalAmount().longValue())
                 .build();
+    }
+
+    private Long resolveFirstShopOrderId(Order order) {
+        if (order == null || order.getOrderId() == null) {
+            return null;
+        }
+
+        List<ShopOrder> shopOrders = shopOrderRepository.findByOrder_OrderId(order.getOrderId());
+
+        if (shopOrders == null || shopOrders.isEmpty()) {
+            return null;
+        }
+
+        for (ShopOrder shopOrder : shopOrders) {
+            if (shopOrder != null && shopOrder.getShopOrderId() != null) {
+                return shopOrder.getShopOrderId();
+            }
+        }
+
+        return null;
     }
 
     private void notifySellerNewOrder(ShopOrder shopOrder) {
@@ -577,57 +598,80 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public BaseResponse<?> handlePaymentCallback(PaymentCallbackRequest request) {
-        // Gọi hằng số qua đường dẫn nếu không có import tĩnh
-        if (!"123456789_DEV_SIGNATURE".equals(request.getSignature()) && request.getSignature() != null) {
-            // (Tuỳ thuộc vào logic team, có thể điều chỉnh lại hàm kiểm tra chữ ký nếu cần)
+        if (request == null) {
+            return BaseResponse.error(400, "Thiếu dữ liệu callback thanh toán");
+        }
+
+        if (request.getOrderId() == null || request.getOrderId() <= 0) {
+            return BaseResponse.error(400, "orderId không hợp lệ");
+        }
+
+        if (request.getTransactionId() == null || request.getTransactionId() <= 0) {
+            return BaseResponse.error(400, "transactionId không hợp lệ");
         }
 
         Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng!"));
+                .orElse(null);
 
-        if (order.getPaymentMethod() != PaymentMethod.ONLINE) {
-            throw new RuntimeException("Đơn hàng này không phải thanh toán online!");
+        if (order == null) {
+            return BaseResponse.error(404, "Không tìm thấy đơn hàng");
+        }
+
+        Transaction transaction = transactionRepository.findById(request.getTransactionId())
+                .orElse(null);
+
+        if (transaction == null) {
+            return BaseResponse.error(404, "Không tìm thấy giao dịch thanh toán");
+        }
+
+        if (transaction.getOrder() == null
+                || transaction.getOrder().getOrderId() == null
+                || !transaction.getOrder().getOrderId().equals(order.getOrderId())) {
+            return BaseResponse.error(400, "Giao dịch không thuộc đơn hàng này");
         }
 
         if (request.getPaymentProvider() != null
                 && order.getPaymentProvider() != null
                 && request.getPaymentProvider() != order.getPaymentProvider()) {
-            throw new RuntimeException("Cổng thanh toán callback không khớp với đơn hàng!");
+            return BaseResponse.error(400, "Cổng thanh toán không khớp với đơn hàng");
         }
 
-        Transaction transaction = transactionRepository.findByOrder_OrderId(order.getOrderId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy giao dịch thanh toán!"));
-
-        if (request.getTransactionId() != null
-                && !transaction.getTransactionId().equals(request.getTransactionId())) {
-            throw new RuntimeException("Transaction không khớp!");
+        if (request.getProviderTransactionId() != null
+                && !request.getProviderTransactionId().trim().isEmpty()) {
+            transaction.setProviderTransactionId(request.getProviderTransactionId().trim());
         }
 
-        if (transaction.getStatus() == PaymentStatus.COMPLETED) {
+        /*
+         * VNPay có thể gọi cả ReturnUrl và IPN.
+         * Nếu đã xử lý thành công rồi thì không trừ kho lần 2.
+         */
+        if (transaction.getStatus() == PaymentStatus.COMPLETED
+                && order.getPaymentStatus() == PaymentStatus.COMPLETED) {
             return BaseResponse.success_data(
-                    "Giao dịch đã được xử lý trước đó",
+                    "Đơn hàng đã được thanh toán trước đó",
                     buildCheckoutResponse(order, transaction, null)
             );
         }
 
-        if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
-            throw new RuntimeException("Đơn hàng không ở trạng thái chờ thanh toán!");
-        }
+        boolean success = Boolean.TRUE.equals(request.getSuccess());
 
-        if (!Boolean.TRUE.equals(request.getSuccess())) {
+        if (!success) {
             transaction.setStatus(PaymentStatus.FAILED);
-            transaction.setProviderTransactionId(request.getProviderTransactionId());
-            transactionRepository.save(transaction);
 
-            order.setPaymentStatus(PaymentStatus.FAILED);
-            order.setStatus(OrderStatus.PAYMENT_FAILED);
-            orderRepository.save(order);
+            if (order.getPaymentStatus() != PaymentStatus.COMPLETED) {
+                order.setPaymentStatus(PaymentStatus.FAILED);
+                order.setStatus(OrderStatus.PAYMENT_FAILED);
 
-            List<ShopOrder> shopOrders = shopOrderRepository.findByOrder_OrderId(order.getOrderId());
-            for (ShopOrder shopOrder : shopOrders) {
-                shopOrder.setStatus(OrderStatus.PAYMENT_FAILED);
-                shopOrderRepository.save(shopOrder);
+                List<ShopOrder> failedShopOrders = shopOrderRepository.findByOrder_OrderId(order.getOrderId());
+
+                for (ShopOrder shopOrder : failedShopOrders) {
+                    shopOrder.setStatus(OrderStatus.PAYMENT_FAILED);
+                    shopOrderRepository.save(shopOrder);
+                }
             }
+
+            transactionRepository.save(transaction);
+            orderRepository.save(order);
 
             return BaseResponse.success_data(
                     "Thanh toán thất bại",
@@ -635,63 +679,144 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
+        /*
+         * Từ đây trở xuống là thanh toán thành công.
+         * Phải làm đủ nghiệp vụ sau:
+         * 1. Check tồn kho lần cuối
+         * 2. Trừ kho
+         * 3. Dùng voucher
+         * 4. Xóa sản phẩm khỏi giỏ nếu checkout từ cart
+         * 5. Ghi purchase event cho recommendation
+         * 6. Thông báo seller
+         * 7. Đổi paymentStatus = COMPLETED
+         */
+
         List<ShopOrder> shopOrders = shopOrderRepository.findByOrder_OrderId(order.getOrderId());
+
+        if (shopOrders == null || shopOrders.isEmpty()) {
+            return BaseResponse.error(404, "Không tìm thấy shop order của đơn hàng");
+        }
+
         Set<Long> checkedOutVariantIds = new HashSet<>();
 
+        /*
+         * Bước 1: validate stock toàn bộ trước.
+         * Làm trước để nếu có sản phẩm hết hàng thì chưa trừ bất kỳ sản phẩm nào.
+         */
         for (ShopOrder shopOrder : shopOrders) {
+            if (shopOrder == null) continue;
+
             Map<Long, Integer> quantityMap = new HashMap<>();
 
+            if (shopOrder.getItems() == null || shopOrder.getItems().isEmpty()) {
+                return BaseResponse.error(400, "Đơn hàng không có sản phẩm");
+            }
+
             for (OrderItem item : shopOrder.getItems()) {
-                quantityMap.merge(item.getVariant().getVariantId(), item.getQuantity(), Integer::sum);
-                checkedOutVariantIds.add(item.getVariant().getVariantId());
+                if (item == null || item.getVariant() == null) {
+                    return BaseResponse.error(400, "Dữ liệu sản phẩm trong đơn hàng không hợp lệ");
+                }
+
+                Long variantId = item.getVariant().getVariantId();
+                Integer quantity = item.getQuantity();
+
+                if (variantId == null || variantId <= 0) {
+                    return BaseResponse.error(400, "Mã biến thể sản phẩm không hợp lệ");
+                }
+
+                if (quantity == null || quantity <= 0) {
+                    return BaseResponse.error(400, "Số lượng sản phẩm không hợp lệ");
+                }
+
+                quantityMap.merge(variantId, quantity, Integer::sum);
+                checkedOutVariantIds.add(variantId);
             }
 
             validateStockWithLock(quantityMap, shopOrder.getShop().getShopId());
         }
 
+        /*
+         * Bước 2: sau khi validate toàn bộ OK thì mới trừ kho.
+         */
         for (ShopOrder shopOrder : shopOrders) {
             Map<Long, Integer> quantityMap = new HashMap<>();
 
             for (OrderItem item : shopOrder.getItems()) {
-                quantityMap.merge(item.getVariant().getVariantId(), item.getQuantity(), Integer::sum);
+                quantityMap.merge(
+                        item.getVariant().getVariantId(),
+                        item.getQuantity(),
+                        Integer::sum
+                );
             }
 
             decreaseStock(quantityMap);
+        }
 
-            if (shopOrder.getVoucher() != null) {
-                voucherService.useVoucher(shopOrder.getVoucher().getCode(), order.getUser().getUserId());
+        /*
+         * Bước 3: dùng voucher, chuyển shopOrder sang PENDING, thông báo seller.
+         */
+        for (ShopOrder shopOrder : shopOrders) {
+            if (shopOrder.getVoucher() != null
+                    && shopOrder.getVoucher().getCode() != null
+                    && !shopOrder.getVoucher().getCode().isBlank()) {
+                voucherService.useVoucher(
+                        shopOrder.getVoucher().getCode(),
+                        order.getUser().getUserId()
+                );
             }
 
             shopOrder.setStatus(OrderStatus.PENDING);
             shopOrderRepository.save(shopOrder);
+
             notifySellerNewOrder(shopOrder);
         }
 
+        /*
+         * Bước 4: cập nhật trạng thái order + transaction.
+         */
         order.setPaymentStatus(PaymentStatus.COMPLETED);
         order.setStatus(OrderStatus.PENDING);
-        orderRepository.save(order);
 
         transaction.setStatus(PaymentStatus.COMPLETED);
-        transaction.setProviderTransactionId(request.getProviderTransactionId());
+
+        if (request.getProviderTransactionId() != null
+                && !request.getProviderTransactionId().trim().isEmpty()) {
+            transaction.setProviderTransactionId(request.getProviderTransactionId().trim());
+        }
+
+        orderRepository.save(order);
         transactionRepository.save(transaction);
 
+        /*
+         * Bước 5: nếu mua từ giỏ hàng thì xóa khỏi giỏ.
+         */
         if (order.getCheckoutSource() == CheckoutSource.FROM_CART) {
             deleteCheckedOutCartItems(order.getUser(), checkedOutVariantIds);
         }
+
+        /*
+         * Bước 6: ghi purchase event cho recommendation.
+         */
         for (ShopOrder shopOrder : shopOrders) {
+            if (shopOrder.getItems() == null) continue;
+
             for (OrderItem item : shopOrder.getItems()) {
-                if (item.getVariant() != null && item.getVariant().getProduct() != null) {
-                    recommendationEventService.recordPurchase(
-                            order.getUser(),
-                            item.getVariant().getProduct(),
-                            item.getQuantity()
-                    );
+                if (item == null
+                        || item.getVariant() == null
+                        || item.getVariant().getProduct() == null) {
+                    continue;
                 }
+
+                recommendationEventService.recordPurchase(
+                        order.getUser(),
+                        item.getVariant().getProduct(),
+                        item.getQuantity()
+                );
             }
         }
 
         return BaseResponse.success_data(
-                "Thanh toán thành công",
+                "Thanh toán thành công, đơn hàng đã chuyển sang trạng thái đã thanh toán",
                 buildCheckoutResponse(order, transaction, null)
         );
     }

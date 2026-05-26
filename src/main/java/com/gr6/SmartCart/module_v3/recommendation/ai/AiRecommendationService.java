@@ -22,14 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -541,15 +534,32 @@ public class AiRecommendationService {
             reviewCount = (long) ratingData[1];
         }
 
+        List<String> images = resolveProductImages(product);
+        String mainImage = images.isEmpty() ? null : images.get(0);
+
+        Long categoryId = null;
+        String categoryName = "";
+
+        if (product.getCategory() != null) {
+            categoryId = product.getCategory().getCategoryId();
+            categoryName = product.getCategory().getCategoryName();
+        }
+
         return new AiProductCandidate(
                 product.getProductId(),
                 buildProductText(product),
-                resolveProductImage(product),
+                mainImage,
+                images,
+                categoryId,
+                categoryName,
+                product.getBrand(),
+                product.getName(),
                 soldMap.getOrDefault(product.getProductId(), 0),
                 rating,
                 reviewCount
         );
     }
+
 
     private RecommendedProductDTO toRecommendedDTO(
             Product product,
@@ -777,6 +787,69 @@ public class AiRecommendationService {
         }
 
         return map;
+    }
+
+    private List<String> resolveProductImages(Product product) {
+        List<String> result = new ArrayList<>();
+
+        if (product == null) {
+            return result;
+        }
+
+        // 1. Lấy ảnh chính từ products.image_urls
+        if (product.getImageUrls() != null && !product.getImageUrls().isBlank()) {
+            String raw = product.getImageUrls()
+                    .replace("[", "")
+                    .replace("]", "")
+                    .replace("\"", "")
+                    .replace("\\", "");
+
+            String[] parts = raw.split(",");
+
+            for (String part : parts) {
+                if (part == null) continue;
+
+                String url = part.trim();
+
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    result.add(url);
+                }
+            }
+        }
+
+        // 2. Lấy thêm ảnh từ biến thể sản phẩm
+        if (product.getVariants() != null) {
+            product.getVariants()
+                    .stream()
+                    .filter(variant -> variant != null)
+                    .filter(variant -> variant.getImageUrl() != null)
+                    .map(variant -> variant.getImageUrl().trim())
+                    .filter(url -> !url.isBlank())
+                    .filter(url -> url.startsWith("http://") || url.startsWith("https://"))
+                    .forEach(result::add);
+        }
+
+        // 3. Xóa ảnh trùng nhau
+        List<String> unique = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        for (String url : result) {
+            if (url == null || url.isBlank()) continue;
+
+            String cleanUrl = url.trim();
+
+            if (seen.contains(cleanUrl)) continue;
+
+            seen.add(cleanUrl);
+            unique.add(cleanUrl);
+
+            // Không gửi quá nhiều ảnh cho 1 sản phẩm
+            if (unique.size() >= 8) {
+                break;
+            }
+        }
+
+        return unique;
     }
 
     private String resolveProductImage(Product product) {

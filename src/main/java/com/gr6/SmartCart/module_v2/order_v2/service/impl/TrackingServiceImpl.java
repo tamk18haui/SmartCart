@@ -62,21 +62,37 @@ public class TrackingServiceImpl implements TrackingService {
 
         List<OrderHistoryResponse> responses = shopOrders.stream()
                 .filter(Objects::nonNull)
-                .map(shopOrder -> OrderHistoryResponse.builder()
-                        .orderId(shopOrder.getOrder() == null ? null : shopOrder.getOrder().getOrderId())
-                        .shopOrderId(shopOrder.getShopOrderId())
-                        .shopId(shopOrder.getShop() == null ? null : shopOrder.getShop().getShopId())
-                        .shopName(shopOrder.getShop() == null ? "SmartCart Shop" : shopOrder.getShop().getShopName())
-                        .status(shopOrder.getStatus())
-                        .totalAmount(toBigDecimal(shopOrder.getTotalAmount()))
-                        .createdAt(shopOrder.getOrder() == null ? null : shopOrder.getOrder().getCreatedAt())
-                        .items(shopOrder.getItems() == null
-                                ? List.of()
-                                : shopOrder.getItems()
-                                  .stream()
-                                  .map(this::mapHistoryItem)
-                                  .collect(Collectors.toList()))
-                        .build())
+                .map(shopOrder -> {
+                    Order order = shopOrder.getOrder();
+
+                    return OrderHistoryResponse.builder()
+                            .orderId(order == null ? null : order.getOrderId())
+                            .shopOrderId(shopOrder.getShopOrderId())
+                            .shopId(shopOrder.getShop() == null ? null : shopOrder.getShop().getShopId())
+                            .shopName(shopOrder.getShop() == null ? "SmartCart Shop" : shopOrder.getShop().getShopName())
+                            .status(shopOrder.getStatus())
+
+                            .paymentMethod(order == null || order.getPaymentMethod() == null
+                                    ? null
+                                    : order.getPaymentMethod().name())
+                            .paymentProvider(order == null || order.getPaymentProvider() == null
+                                    ? null
+                                    : order.getPaymentProvider().name())
+                            .paymentStatus(order == null || order.getPaymentStatus() == null
+                                    ? null
+                                    : order.getPaymentStatus().name())
+
+                            .totalAmount(toBigDecimal(shopOrder.getTotalAmount()))
+                            .createdAt(order == null ? null : order.getCreatedAt())
+                            .canCancel(canBuyerCancel(shopOrder))
+                            .items(shopOrder.getItems() == null
+                                    ? List.of()
+                                    : shopOrder.getItems()
+                                      .stream()
+                                      .map(this::mapHistoryItem)
+                                      .collect(Collectors.toList()))
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return BaseResponse.success_data(
@@ -270,6 +286,7 @@ public class TrackingServiceImpl implements TrackingService {
 
         CheckoutOrderResponse response = CheckoutOrderResponse.builder()
                 .orderId(order.getOrderId())
+                .shopOrderId(shopOrder.getShopOrderId())
                 .transactionId(transaction.getTransactionId())
                 .paymentUrl(paymentResult.getPaymentUrl())
                 .orderStatus(order.getStatus().name())
@@ -428,6 +445,17 @@ public class TrackingServiceImpl implements TrackingService {
         }
 
         return null;
+    }
+    private boolean canBuyerCancel(ShopOrder shopOrder) {
+        if (shopOrder == null || shopOrder.getStatus() == null) {
+            return false;
+        }
+
+        OrderStatus status = shopOrder.getStatus();
+
+        return status == OrderStatus.PENDING
+                || status == OrderStatus.PENDING_PAYMENT
+                || status == OrderStatus.CONFIRMED;
     }
 
     private BigDecimal toBigDecimal(Long value) {
