@@ -12,23 +12,29 @@ import com.gr6.SmartCart.modules.catalog.repository.CatalogReviewRepository;
 import com.gr6.SmartCart.modules.storefront.dto.ProductResponseDTO;
 import com.gr6.SmartCart.modules.storefront.dto.SearchFilterRequest;
 import com.gr6.SmartCart.modules.storefront.repository.StorefrontProductRepository;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
 public class DiscoveryService {
+
+    private static final Pattern DIACRITICS = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
 
     @Autowired
     private StorefrontProductRepository productRepository;
@@ -95,7 +101,157 @@ public class DiscoveryService {
                 pageable
         );
 
-        return productPage.map(this::mapToDTO);
+        if (productPage.hasContent() || keyword.isBlank()) {
+            return productPage.map(this::mapToDTO);
+        }
+
+        return fuzzySearch(keyword, categoryId, minPrice, maxPrice, sortBy, pageable);
+    }
+
+    private Page<ProductResponseDTO> fuzzySearch(
+            String keyword,
+            Long categoryId,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            String sortBy,
+            Pageable pageable
+    ) {
+        List<Product> candidates = productRepository.findSellableProductsForFuzzy(
+                categoryId,
+                minPrice,
+                maxPrice,
+                ProductStatus.ACTIVE,
+                ShopStatus.ACTIVE,
+                CategoryStatus.ACTIVE,
+                VariantStatus.ACTIVE
+        );
+
+        String normalizedKeyword = normalizeText(keyword);
+
+        List<Product> matched = candidates.stream()
+                .filter(product -> fuzzyScore(product, normalizedKeyword) >= 45)
+                .sorted(buildFuzzyComparator(normalizedKeyword, sortBy))
+                .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), matched.size());
+
+        List<ProductResponseDTO> content = new ArrayList<>();
+
+        if (start < matched.size()) {
+            content = matched.subList(start, end)
+                    .stream()
+                    .map(this::mapToDTO)
+                    .collect(Collectors.toList());
+        }
+
+        return new PageImpl<>(content, pageable, matched.size());
+    }
+
+    private Comparator<Product> buildFuzzyComparator(String normalizedKeyword, String sortBy) {
+        if ("newest".equals(sortBy)) {
+            return Comparator.comparing(Product::getProductId, Comparator.nullsLast(Comparator.reverseOrder()));
+        }
+
+        if ("sold_desc".equals(sortBy)) {
+            return Comparator
+                    .comparing((Product p) -> safeInt(p.getSoldCount()))
+                    .reversed()
+                    .thenComparing(Product::getProductId, Comparator.nullsLast(Comparator.reverseOrder()));
+        }
+
+        return Comparator
+                .comparing((Product p) -> fuzzyScore(p, normalizedKeyword))
+                .reversed()
+                .thenComparing(Product::getProductId, Comparator.nullsLast(Comparator.reverseOrder()));
+    }
+
+    private int fuzzyScore(Product product, String normalizedKeyword) {
+        if (product == null || normalizedKeyword == null || normalizedKeyword.isBlank()) {
+            return 0;
+        }
+
+        String name = normalizeText(product.getName());
+        String brand = normalizeText(product.getBrand());
+        String category = product.getCategory() == null ? "" : normalizeText(product.getCategory().getCategoryName());
+        String description = normalizeText(product.getDescription());
+        String shop = product.getShop() == null ? "" : normalizeText(product.getShop().getShopName());
+
+        String haystack = String.join(" ", name, brand, category, description, shop).trim();
+
+        if (haystack.contains(normalizedKeyword)) {
+            return 100;
+        }
+
+        int best = 0;
+
+        for (String token : normalizedKeyword.split("\\s+")) {
+            if (token.isBlank()) continue;
+
+            if (haystack.contains(token)) {
+                best += 35;
+            }
+        }
+
+        for (String word : haystack.split("\\s+")) {
+            if (word.isBlank()) continue;
+
+            int distance = levenshtein(normalizedKeyword, word);
+            int maxLen = Math.max(normalizedKeyword.length(), word.length());
+
+            if (maxLen == 0) continue;
+
+            int score = (int) Math.round((1.0 - (double) distance / maxLen) * 100);
+
+            if (score > best) {
+                best = score;
+            }
+        }
+
+        if (normalizedKeyword.contains("quan ao")) {
+            if (category.contains("thoi trang") || name.contains("ao") || name.contains("quan")) {
+                best = Math.max(best, 90);
+            }
+        }
+
+        if (normalizedKeyword.contains("ao thun")) {
+            if (name.contains("ao thun") || description.contains("cotton") || category.contains("thoi trang")) {
+                best = Math.max(best, 90);
+            }
+        }
+
+        return Math.min(best, 100);
+    }
+
+    private int levenshtein(String a, String b) {
+        if (a == null) a = "";
+        if (b == null) b = "";
+
+        int[][] dp = new int[a.length() + 1][b.length() + 1];
+
+        for (int i = 0; i <= a.length(); i++) {
+            dp[i][0] = i;
+        }
+
+        for (int j = 0; j <= b.length(); j++) {
+            dp[0][j] = j;
+        }
+
+        for (int i = 1; i <= a.length(); i++) {
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+
+                dp[i][j] = Math.min(
+                        Math.min(
+                                dp[i - 1][j] + 1,
+                                dp[i][j - 1] + 1
+                        ),
+                        dp[i - 1][j - 1] + cost
+                );
+            }
+        }
+
+        return dp[a.length()][b.length()];
     }
 
     private ProductResponseDTO mapToDTO(Product product) {
@@ -116,9 +272,6 @@ public class DiscoveryService {
         if (product.getShop() != null) {
             dto.setShopId(product.getShop().getShopId());
             dto.setShopName(product.getShop().getShopName());
-
-            // Frontend đang dùng location ở vài card cũ,
-            // nên set luôn location = tên shop để không hiện địa chỉ nữa.
             dto.setLocation(product.getShop().getShopName());
         }
 
@@ -228,6 +381,20 @@ public class DiscoveryService {
         return keyword.trim();
     }
 
+    private String normalizeText(String value) {
+        if (value == null) return "";
+
+        String normalized = Normalizer.normalize(value.trim().toLowerCase(), Normalizer.Form.NFD);
+
+        return DIACRITICS.matcher(normalized)
+                .replaceAll("")
+                .replace("đ", "d")
+                .replace("Đ", "D")
+                .replaceAll("[^a-z0-9\\s]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
     private int normalizePage(int page) {
         return Math.max(page, 0);
     }
@@ -255,5 +422,9 @@ public class DiscoveryService {
             default:
                 return "relevance";
         }
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
     }
 }
